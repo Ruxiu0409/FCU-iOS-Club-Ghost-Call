@@ -16,8 +16,8 @@ jobs:
     name: 測試
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -57,12 +57,21 @@ jobs:
       name: production
       url: https://ghost-call.enokgood2.workers.dev
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: 檢查憑證有沒有設
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::還沒設 CLOUDFLARE_API_TOKEN。到 Cloudflare dashboard 用 Edit Cloudflare Workers 範本產生一組，再跑 gh secret set CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+
       - name: wrangler deploy
         run: npx wrangler deploy
         env:

@@ -12,6 +12,20 @@ const check = (name, got, want) => {
   ok ? pass++ : fail++;
 };
 
+// 等條件成立，不要用固定 sleep 賭伺服器多快回來。
+// 成立就立刻回傳；逾時則回傳最後一次的值，讓 check 印出真正的狀況。
+async function until(get, ok, ms = 5000) {
+  const t0 = Date.now();
+  let v;
+  do {
+    v = await get();
+    if (ok(v)) return v;
+    await sleep(40);
+  } while (Date.now() - t0 < ms);
+  return v;
+}
+const eq = (want) => (v) => JSON.stringify(v) === JSON.stringify(want);
+
 function open(url) {
   return new Promise((res, rej) => {
     const ws = new WebSocket(url);
@@ -32,6 +46,16 @@ function open(url) {
 }
 const guest = () => open(`${HOST}/ws?room=${ROOM}`);
 const admin = () => open(`${HOST}/ws?role=admin&room=${ROOM}&token=${TOKEN}`);
+const last = (o) => () => o.states.at(-1);
+const online = (o) => () => o.stats?.online;
+
+async function csvRows() {
+  const res = await fetch(`${HTTP}/export?room=${ROOM}&token=${TOKEN}`);
+  const bytes = new Uint8Array(await res.clone().arrayBuffer());
+  const text = await res.text();          // 注意：text() 解碼時會吃掉 BOM
+  const rows = text.trim().split("\r\n").map((l) => l.slice(1, -1).split('","'));
+  return { bytes, rows };
+}
 
 // --- 權限 ---
 let rejected = false;
@@ -41,68 +65,63 @@ check("錯的 token 匯不出 CSV",
   (await fetch(`${HTTP}/export?room=${ROOM}&token=wrong`)).status, 401);
 
 const a = await admin();
-await sleep(300);
+await until(online(a), (v) => v !== undefined);
 
 // --- 報名字才算人頭 ---
 const g1 = await guest();
-await sleep(300);
-check("一進場就拿到當前場景", g1.states.at(-1), { scene: "stage", rev: 0 });
+check("一進場就拿到當前場景",
+  await until(last(g1), eq({ scene: "stage", rev: 0 })), { scene: "stage", rev: 0 });
+await sleep(300);                        // 沒有事件可等，只能給一點時間確認它「不會」變
 check("還沒報暱稱不算在線", a.stats.online, 0);
 
 g1.join("dev-1", "小明");
-await sleep(400);
-check("報了暱稱才算在線", a.stats.online, 1);
-check("伺服器確認收到暱稱", g1.joined, "小明");
+check("報了暱稱才算在線", await until(online(a), eq(1)), 1);
+check("伺服器確認收到暱稱", await until(() => g1.joined, eq("小明")), "小明");
 
 // --- 觸發 ---
 a.ws.send(JSON.stringify({ type: "scene", scene: "ringing", fromRev: 0 }));
-await sleep(400);
-check("觸發後收到來電", g1.states.at(-1), { scene: "ringing", rev: 1 });
+check("觸發後收到來電",
+  await until(last(g1), eq({ scene: "ringing", rev: 1 })), { scene: "ringing", rev: 1 });
 
 // --- 遲到的人 ---
 const late = await guest();
 late.join("dev-2", "阿美");
-await sleep(400);
-check("遲到進場直接看到來電中", late.states.at(-1), { scene: "ringing", rev: 1 });
-check("兩個人都在線", a.stats.online, 2);
+check("遲到進場直接看到來電中",
+  await until(last(late), eq({ scene: "ringing", rev: 1 })), { scene: "ringing", rev: 1 });
+check("兩個人都在線", await until(online(a), eq(2)), 2);
 
 // --- 回報 ---
-g1.pick("answer", 0);                      // 舊的一輪
-await sleep(200);
+g1.pick("answer", 0);                      // 舊的一輪，應該被丟掉
+await sleep(120);
 g1.pick("answer", 1);
-await sleep(150);
+await sleep(120);
 g1.pick("decline", 1);                     // 同一輪第二次，應該被忽略
 late.pick("decline", 1);
-await sleep(400);
 
 // --- 同一支裝置重連，不應該變成兩個人 ---
 g1.ws.close();
-await sleep(500);
-check("有人離線後人數會掉", a.stats.online, 1);
+check("有人離線後人數會掉", await until(online(a), eq(1)), 1);
 const again = await guest();
 again.join("dev-1", "小明");                // 同一個 device id
-await sleep(400);
-check("同一裝置重連不會變成新的人", a.stats.online, 2);
-check("重連後接回當前場景", again.states.at(-1), { scene: "ringing", rev: 1 });
+check("同一裝置重連不會變成新的人", await until(online(a), eq(2)), 2);
+check("重連後接回當前場景",
+  await until(last(again), eq({ scene: "ringing", rev: 1 })), { scene: "ringing", rev: 1 });
 
-// --- 重按觸發 ---
+// --- 重按觸發：這是在驗「不會發生的事」，只能等一段固定時間 ---
 const before = late.states.length;
 a.ws.send(JSON.stringify({ type: "scene", scene: "ringing", fromRev: 1 }));
-await sleep(400);
+await sleep(800);
 check("重按觸發不會讓全場再響一次", late.states.length, before);
 
 // --- 收回 ---
 a.ws.send(JSON.stringify({ type: "scene", scene: "stage", fromRev: 1 }));
-await sleep(400);
-check("收回後回到看台上", late.states.at(-1), { scene: "stage", rev: 2 });
+check("收回後回到看台上",
+  await until(last(late), eq({ scene: "stage", rev: 2 })), { scene: "stage", rev: 2 });
 
-// --- CSV ---
-const res = await fetch(`${HTTP}/export?room=${ROOM}&token=${TOKEN}`);
-// 注意：Response.text() 解碼時會吃掉 BOM，所以要驗原始位元組
-const bytes = new Uint8Array(await res.clone().arrayBuffer());
-const csv = await res.text();
-const rows = csv.replace(/^﻿/, "").trim().split("\r\n").map((l) =>
-  l.slice(1, -1).split('","')
+// --- CSV：等兩個人的選擇都寫進去 ---
+const { bytes, rows } = await until(
+  csvRows,
+  (r) => r.rows.length === 3 && r.rows[1][2] !== "沒反應" && r.rows[2][2] !== "沒反應"
 );
 check("CSV 有 BOM（Excel 開中文不亂碼）", [...bytes.slice(0, 3)], [0xEF, 0xBB, 0xBF]);
 check("CSV 標題列", [rows[0][0], rows[0][1], rows[0][2]], ["暱稱", "加入時間", "第1輪"]);

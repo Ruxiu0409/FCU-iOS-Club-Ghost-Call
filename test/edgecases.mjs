@@ -29,7 +29,7 @@ const eq = (want) => (v) => JSON.stringify(v) === JSON.stringify(want);
 function open(url) {
   return new Promise((res, rej) => {
     const ws = new WebSocket(url);
-    const o = { ws, states: [], stats: null, joined: null };
+    const o = { ws, states: [], stats: null, joined: null, wiped: null };
     ws.onopen = () => res(o);
     ws.onerror = () => rej(new Error("connect failed"));
     ws.onmessage = (e) => {
@@ -38,6 +38,7 @@ function open(url) {
       if (m.type === "state") o.states.push({ scene: m.scene, rev: m.rev });
       if (m.type === "joined") o.joined = m.name;
       if (m.stats) o.stats = m.stats;
+      if (m.type === "wiped") o.wiped = m;
     };
     o.join = (id, name) => ws.send(JSON.stringify({ type: "join", id, name }));
     o.pick = (choice, rev) => ws.send(JSON.stringify({ type: "choice", choice, rev }));
@@ -131,6 +132,26 @@ check("小明那列：接聽（第一次的選擇，不是後來改的拒接）"
 check("阿美那列：拒接", [rows[2][0], rows[2][2]], ["阿美", "拒接"]);
 check("加入時間是台北時間格式",
   /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(rows[1][1]), true);
+
+// --- 清除資料：挑「響到一半」這個時機清，這是最容易留下孤兒資料的情況 ---
+a.ws.send(JSON.stringify({ type: "scene", scene: "ringing", fromRev: 2 }));
+await until(last(late), eq({ scene: "ringing", rev: 3 }));
+late.pick("answer", 3);
+await sleep(200);
+
+a.ws.send(JSON.stringify({ type: "wipe" }));
+const w = await until(() => a.wiped, (v) => !!v);
+check("回報刪掉幾筆", w.removed, 2);
+check("現場還連著的人重新登記回去", w.kept, 2);
+check("清除後把大家收回看台上",
+  await until(last(late), eq({ scene: "stage", rev: 4 })), { scene: "stage", rev: 4 });
+check("在線人數沒有因為清除而歸零", await until(online(a), eq(2)), 2);
+
+const after = await until(csvRows, (r) => r.rows[0].length === 2);
+check("清除後沒有殘留的來電輪次欄位", after.rows[0], ["暱稱", "加入時間"]);
+check("清除後名單只剩現場連著的人", after.rows.length - 1, 2);
+check("名字還在（不是變成空白列）",
+  [after.rows[1][0], after.rows[2][0]].sort(), ["小明", "阿美"].sort());
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

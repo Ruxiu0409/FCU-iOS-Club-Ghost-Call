@@ -127,7 +127,43 @@ export class Room {
       return;
     }
 
+    if (msg.type === "wipe") return this.wipe(ws, state);
     if (msg.type === "refresh") this.pushAdmin();
+  }
+
+  // 清空名單與所有回報。不可復原。
+  async wipe(ws, state) {
+    const removed = Number(this.rows(`SELECT COUNT(*) n FROM people`)[0]?.n ?? 0);
+    this.sql.exec(`DELETE FROM choices`);
+    this.sql.exec(`DELETE FROM rounds`);
+    this.sql.exec(`DELETE FROM people`);
+
+    // 現場還連著的人要重新登記回去，否則「在線人數」算得到他們、
+    // 名單卻查無此人，兩邊會對不起來。
+    const now = Date.now();
+    let kept = 0;
+    for (const g of this.ctx.getWebSockets("guest")) {
+      if (g.readyState !== 1) continue;
+      let at;
+      try { at = g.deserializeAttachment(); } catch { continue; }
+      if (!at?.id || !at?.name) continue;
+      this.sql.exec(
+        `INSERT INTO people(id, name, joined_at, last_seen) VALUES(?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET last_seen = excluded.last_seen`,
+        at.id, at.name, now, now
+      );
+      kept++;
+    }
+
+    // 一併收回到看台上。若正響到一半就清掉 rounds，那一輪的回報會被記進
+    // 一個 CSV 裡沒有對應欄位的 rev，變成查不到的孤兒資料。
+    const next = { scene: "stage", rev: state.rev + 1 };
+    await this.ctx.storage.put("state", next);
+    this.broadcast({ type: "state", ...next });
+    this.broadcast(
+      { type: "state", ...next, stats: { online: this.onlineCount() } }, "admin"
+    );
+    ws.send(JSON.stringify({ type: "wiped", removed, kept }));
   }
 
   async onGuest(ws, att, msg, state) {

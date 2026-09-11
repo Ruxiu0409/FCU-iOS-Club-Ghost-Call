@@ -40,6 +40,14 @@
   .trigger:disabled{background:#2a2a33;color:#55555f;cursor:not-allowed}
   .sub{width:100%;padding:14px;font-size:15px;background:#1c1c22;color:#9a9aa5;margin-bottom:10px}
 
+  /* 不可復原的動作，跟其他按鈕拉開距離，避免手滑 */
+  .danger{
+    width:100%;padding:13px;font-size:14px;margin-top:22px;
+    background:transparent;color:#a8564f;border:1px solid #462825;
+  }
+  .danger:active{background:#2a1917}
+  #note{margin-top:12px;text-align:center;font-size:13px;color:#6f8f6f;min-height:1.2em}
+
   .bar{display:flex;align-items:center;gap:9px;justify-content:center;
        margin-top:22px;font-size:13px;color:#71717d}
   .led{width:8px;height:8px;border-radius:50%;background:#6b2f2f}
@@ -64,6 +72,8 @@
     <button class="trigger" id="fire" disabled>觸 發 來 電</button>
     <button class="sub" id="reset" disabled>全部收回「請看台上」</button>
     <button class="sub" id="csv">下載名單 CSV</button>
+    <button class="danger" id="wipe">清除名單資料</button>
+    <div id="note"></div>
     <div class="bar"><i class="led" id="led"></i><span id="status">連線中…</span></div>
     <div class="scene" id="scene"></div>
   </div>
@@ -142,6 +152,11 @@ function connect() {
     let m; try { m = JSON.parse(e.data); } catch { return; }
     if (m.type === "state") { state = { scene: m.scene, rev: m.rev }; render(); }
     if (m.stats) $("online").textContent = m.stats.online;
+    if (m.type === "wiped") {
+      $("note").textContent =
+        `已清除 ${m.removed} 筆` + (m.kept ? `，現場 ${m.kept} 人重新登記` : "");
+      setTimeout(() => { $("note").textContent = ""; }, 6000);
+    }
   };
 
   ws.onclose = () => {
@@ -165,6 +180,11 @@ $("fire").onclick = () => {
 };
 $("reset").onclick = () => {
   ws?.send(JSON.stringify({ type: "scene", scene: "stage", fromRev: state.rev }));
+};
+$("wipe").onclick = () => {
+  if (!confirm("清除所有名單與接聽紀錄？\n\n這個動作不可復原，建議先下載一份 CSV。")) return;
+  if (!confirm("再確認一次：真的要清空嗎？")) return;
+  ws?.send(JSON.stringify({ type: "wipe" }));
 };
 $("csv").onclick = () => {
   location.href = `/export?room=${encodeURIComponent(room)}&token=${encodeURIComponent(token)}`;

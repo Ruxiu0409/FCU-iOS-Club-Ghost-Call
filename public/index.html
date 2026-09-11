@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>請看台上</title>
+<style>
+  :root{ --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px); }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{
+    background:#000;color:#fff;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC",sans-serif;
+    -webkit-user-select:none;user-select:none;
+  }
+  .screen{
+    position:fixed;inset:0;display:none;
+    flex-direction:column;align-items:center;justify-content:center;
+    padding:calc(var(--safe-t) + 24px) 24px calc(var(--safe-b) + 24px);
+    text-align:center;
+  }
+  .screen.on{display:flex}
+
+  /* ---------- 入場 ---------- */
+  #join h1{font-size:24px;font-weight:600;margin:0 0 8px;letter-spacing:.06em}
+  #join p.lead{margin:0 0 34px;font-size:14px;color:#7e7e85;line-height:1.7}
+  .field{width:100%;max-width:300px}
+  #nick{
+    width:100%;background:#16161b;border:1px solid #2c2c36;color:#fff;
+    padding:17px 18px;border-radius:14px;font-size:17px;font-family:inherit;
+    text-align:center;-webkit-user-select:text;user-select:text;
+  }
+  #nick:focus{outline:none;border-color:#5a5a6a;background:#1b1b21}
+  #nick::placeholder{color:#4e4e58}
+  #joinBtn{
+    width:100%;margin-top:12px;padding:17px;border:none;border-radius:14px;
+    background:#fff;color:#000;font-size:17px;font-weight:600;font-family:inherit;cursor:pointer;
+  }
+  #joinBtn:disabled{background:#2a2a33;color:#55555f}
+  .hint{margin-top:26px;font-size:13px;line-height:1.7;color:#5f5f69;max-width:19em}
+
+  /* ---------- 看台上 ---------- */
+  #stage .who{font-size:14px;color:#5c5c63;letter-spacing:.1em;margin-bottom:18px}
+  #stage .big{font-size:30px;font-weight:600;letter-spacing:.24em;text-indent:.24em;color:#e8e8ea}
+  #stage .sub{margin-top:14px;font-size:14px;color:#5c5c63;letter-spacing:.1em}
+  .dot{width:7px;height:7px;border-radius:50%;background:#2f6b3d;margin-top:44px;animation:pulse 2.4s infinite}
+  @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+
+  /* ---------- 來電 ---------- */
+  #ring{
+    justify-content:space-between;
+    background:radial-gradient(120% 80% at 50% 0%,#2b2b31 0%,#0a0a0c 62%,#000 100%);
+  }
+  .caller{margin-top:9vh;display:flex;flex-direction:column;align-items:center}
+  .avatar{
+    width:118px;height:118px;border-radius:50%;
+    background:linear-gradient(160deg,#4a4a52,#26262c);
+    display:flex;align-items:center;justify-content:center;
+    font-size:46px;font-weight:300;color:#d9d9de;margin-bottom:26px;
+  }
+  .cname{font-size:33px;font-weight:500;letter-spacing:.02em}
+  .cinfo{margin-top:9px;font-size:15px;color:#9a9aa3;letter-spacing:.06em}
+  .actions{width:100%;max-width:330px;display:flex;justify-content:space-between;margin-bottom:6vh}
+  .act{display:flex;flex-direction:column;align-items:center;gap:11px}
+  .circle{
+    width:76px;height:76px;border-radius:50%;border:none;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .circle svg{width:32px;height:32px;fill:#fff}
+  .decline{background:#ff3b30}
+  .accept{background:#34c759;animation:jiggle 1.4s ease-in-out infinite}
+  @keyframes jiggle{0%,68%,100%{transform:translateY(0)}78%{transform:translateY(-11px)}88%{transform:translateY(-4px)}}
+  .act span{font-size:13px;color:#b9b9c0}
+
+  /* ---------- 通話中 ---------- */
+  #call .cname{font-size:29px}
+  .timer{margin-top:12px;font-size:17px;color:#9a9aa3;font-variant-numeric:tabular-nums}
+  .wave{display:flex;gap:5px;align-items:flex-end;height:42px;margin-top:40px}
+  .wave i{width:4px;background:#6a6a74;border-radius:2px;animation:w 1s ease-in-out infinite}
+  .wave i:nth-child(2){animation-delay:.12s}.wave i:nth-child(3){animation-delay:.24s}
+  .wave i:nth-child(4){animation-delay:.36s}.wave i:nth-child(5){animation-delay:.48s}
+  @keyframes w{0%,100%{height:9px}50%{height:40px}}
+  #hangup{margin-top:auto;margin-bottom:6vh;background:#ff3b30}
+
+  /* ---------- 結束 ---------- */
+  #done .x{font-size:15px;color:#3a3a40;letter-spacing:.18em}
+
+  .err{position:fixed;left:0;right:0;bottom:calc(var(--safe-b) + 10px);
+       font-size:12px;color:#8a6d3b;text-align:center;padding:0 20px}
+</style>
+</head>
+<body>
+
+<!-- 這個「加入」是整套流程的關鍵：它同時是 iOS 的音訊解鎖手勢 -->
+<div class="screen on" id="join">
+  <h1>歡迎加入</h1>
+  <p class="lead">輸入一個暱稱，方便活動後對名單</p>
+  <div class="field">
+    <input id="nick" type="text" inputmode="text" maxlength="24" autocomplete="nickname"
+           placeholder="你的暱稱" enterkeyhint="go">
+    <button id="joinBtn" disabled>加入</button>
+  </div>
+  <p class="hint">請把音量轉大<br>加入後請看台上</p>
+</div>
+
+<div class="screen" id="stage">
+  <div class="who" id="whoami"></div>
+  <div class="big">請看台上</div>
+  <div class="sub">保持這個畫面不要關掉</div>
+  <div class="dot" id="dot"></div>
+</div>
+
+<div class="screen" id="ring">
+  <div class="caller">
+    <div class="avatar" id="avatar">?</div>
+    <div class="cname" id="ringName">未知號碼</div>
+    <div class="cinfo" id="ringInfo">iPhone 來電</div>
+  </div>
+  <div class="actions">
+    <div class="act">
+      <button class="circle decline" id="declineBtn" aria-label="拒接">
+        <svg viewBox="0 0 24 24" style="transform:rotate(135deg)"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
+      </button>
+      <span>拒接</span>
+    </div>
+    <div class="act">
+      <button class="circle accept" id="acceptBtn" aria-label="接聽">
+        <svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
+      </button>
+      <span>接聽</span>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="call">
+  <div class="caller">
+    <div class="avatar" id="avatar2">?</div>
+    <div class="cname" id="callName">未知號碼</div>
+    <div class="timer" id="timer">00:00</div>
+    <div class="wave"><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+  <button class="circle" id="hangup" aria-label="掛斷">
+    <svg viewBox="0 0 24 24" style="transform:rotate(135deg)"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
+  </button>
+</div>
+
+<div class="screen" id="done"><div class="x">— 通話結束 —</div></div>
+
+<audio id="ringAudio" src="/ringtone.wav" loop preload="auto" playsinline></audio>
+<audio id="recAudio" preload="auto" playsinline></audio>
+<div class="err" id="err"></div>
+
+<script>
+// ===== 要改的東西都在這 =====
+const CONFIG = {
+  callerName: "未知號碼",
+  callerInfo: "iPhone 來電",
+  avatarText: "?",
+  recording: "/recording.mp3",              // 放你的錄音；找不到會自動退回下面那個
+  fallbackRecording: "/placeholder-recording.wav",
+  room: new URLSearchParams(location.search).get("room") || "main",
+};
+// ============================
+
+const $ = (id) => document.getElementById(id);
+const ringAudio = $("ringAudio"), recAudio = $("recAudio");
+let rev = -1, myChoice = null, ws = null, timerId = null, wakeLock = null;
+let myName = "";
+
+// 裝置 id 存在 localStorage：斷線重連回來還是同一個人，不會被算成兩個
+let myId = localStorage.getItem("ghostcall_id");
+if (!myId) {
+  myId = (crypto.randomUUID?.() || String(Math.random()).slice(2) + Date.now()).slice(0, 36);
+  try { localStorage.setItem("ghostcall_id", myId); } catch {}
+}
+
+$("ringName").textContent = $("callName").textContent = CONFIG.callerName;
+$("ringInfo").textContent = CONFIG.callerInfo;
+$("avatar").textContent = $("avatar2").textContent = CONFIG.avatarText;
+
+function show(id) {
+  for (const s of document.querySelectorAll(".screen")) s.classList.toggle("on", s.id === id);
+}
+
+// 記住上次用的暱稱
+try { $("nick").value = localStorage.getItem("ghostcall_name") || ""; } catch {}
+const validName = () => $("nick").value.trim().length > 0;
+const syncBtn = () => { $("joinBtn").disabled = !validName(); };
+$("nick").addEventListener("input", syncBtn);
+syncBtn();
+
+// 錄音檔在不在，先探一次，免得解鎖時 play() 直接 reject
+(async () => {
+  let src = CONFIG.fallbackRecording;
+  try {
+    const r = await fetch(CONFIG.recording, { method: "HEAD" });
+    if (r.ok) src = CONFIG.recording;
+  } catch {}
+  recAudio.src = src;
+})();
+
+// ---------- 音訊解鎖：整套體驗成立的前提 ----------
+// 兩個 play() 一定要在同一個手勢事件裡「同步」發出。
+// 若先 await 第一個再呼叫第二個，iOS 會判定已經脫離使用者手勢而擋掉。
+function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+  const jobs = [ringAudio, recAudio].map((el) => {
+    let p;
+    try { p = el.play(); } catch { return Promise.resolve(); }
+    return Promise.resolve(p)
+      .then(() => { el.pause(); el.currentTime = 0; })
+      .catch(() => { $("err").textContent = "音訊可能被擋住，請確認沒有開靜音"; });
+  });
+  return Promise.allSettled(jobs);
+}
+
+async function keepAwake() {
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { keepAwake(); ensureSocket(); }
+});
+
+// ---------- 場景切換 ----------
+function applyState(st) {
+  if (st.rev === rev) return;
+  rev = st.rev;
+  myChoice = null;
+  stopRing();
+  stopRecording();
+  if (st.scene === "ringing") startRinging();
+  else show("stage");
+}
+
+function startRinging() {
+  show("ring");
+  ringAudio.currentTime = 0;
+  ringAudio.play().catch(() => {
+    $("err").textContent = "鈴聲被擋住了，但畫面是對的，可以直接接聽";
+  });
+  navigator.vibrate?.([600, 400, 600, 400, 600, 2000]);   // iOS 不支援，Android 才有
+}
+
+function stopRing() {
+  ringAudio.pause();
+  ringAudio.currentTime = 0;
+  navigator.vibrate?.(0);
+}
+
+function stopRecording() {
+  recAudio.pause();
+  clearInterval(timerId);
+}
+
+function report(choice) {
+  if (myChoice) return;
+  myChoice = choice;
+  send({ type: "choice", choice, rev });
+}
+
+$("acceptBtn").onclick = () => {
+  stopRing();
+  report("answer");
+  show("call");
+  const t0 = Date.now();
+  const tick = () => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    $("timer").textContent =
+      String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  };
+  tick();
+  timerId = setInterval(tick, 500);
+  recAudio.currentTime = 0;
+  recAudio.play().catch(() => { $("err").textContent = "錄音播不出來，請檢查音量"; });
+  recAudio.onended = () => { stopRecording(); show("done"); };
+};
+
+$("declineBtn").onclick = () => { stopRing(); report("decline"); show("done"); };
+$("hangup").onclick = () => { stopRecording(); show("done"); };
+
+function doJoin() {
+  if (!validName()) return;
+  myName = $("nick").value.trim().slice(0, 24);
+  try { localStorage.setItem("ghostcall_name", myName); } catch {}
+  unlockAudio();                 // 必須在這個手勢裡呼叫，不能放到 await 之後
+  keepAwake();
+  $("whoami").textContent = myName;
+  show("stage");
+  ensureSocket();
+}
+$("joinBtn").onclick = doJoin;
+$("nick").addEventListener("keydown", (e) => { if (e.key === "Enter") doJoin(); });
+
+// ---------- 連線：重連要有抖動，不然 400 人會同時湧回來 ----------
+let retries = 0, pingId = null;
+
+function send(obj) {
+  try { if (ws?.readyState === 1) ws.send(JSON.stringify(obj)); } catch {}
+}
+
+function ensureSocket() {
+  if (!myName) return;                                   // 還沒填暱稱就先不連
+  if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws?room=${encodeURIComponent(CONFIG.room)}`);
+
+  ws.onopen = () => {
+    retries = 0;
+    $("dot").style.background = "#2f6b3d";
+    // 每次連上都要重報一次：伺服器端重連後是一條全新的連線，不記得你是誰
+    send({ type: "join", id: myId, name: myName });
+    clearInterval(pingId);
+    // "p" 走 DO 的 auto-response：不喚醒物件、不計費
+    pingId = setInterval(() => { if (ws?.readyState === 1) ws.send("p"); }, 25000);
+  };
+
+  ws.onmessage = (e) => {
+    if (e.data === "P") return;
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.type === "state") applyState(m);
+  };
+
+  ws.onclose = () => {
+    $("dot").style.background = "#6b2f2f";
+    clearInterval(pingId);
+    const base = Math.min(1000 * 2 ** retries++, 15000);
+    setTimeout(ensureSocket, base * (0.5 + Math.random()));   // 抖動
+  };
+
+  ws.onerror = () => { try { ws.close(); } catch {} };
+}
+</script>
+</body>
+</html>

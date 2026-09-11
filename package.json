@@ -1,0 +1,19 @@
+{
+  "name": "fcu-ios-club-live",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node test/edgecases.mjs",
+    "test:load": "node test/loadtest.mjs 400",
+    "gen:audio": "node scripts/gen-audio.mjs",
+    "test:latency": "node test/measure.mjs 12",
+    "test:ballast": "node test/ballast.mjs 400 300000",
+    "test:online": "node test/watch-online.mjs 200"
+  },
+  "devDependencies": {
+    "wrangler": "^4.42.0"
+  },
+  "description": "FCU iOS Club 茶會演講互動連線 — 台下 400 支手機同時變成一通假來電",
+  "license": "MIT"
+}

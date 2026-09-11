@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>控制台</title>
+<style>
+  *{box-sizing:border-box}
+  body{
+    margin:0;min-height:100vh;background:#0c0c0f;color:#e9e9ee;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC",sans-serif;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:max(28px,env(safe-area-inset-top)) 20px max(28px,env(safe-area-inset-bottom));
+  }
+  .wrap{width:100%;max-width:460px}
+  [hidden]{display:none!important}
+  h1{font-size:15px;font-weight:600;letter-spacing:.18em;color:#71717d;margin:0 0 26px;text-align:center}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px}
+
+  /* ---------- 門檻 ---------- */
+  #gate p{margin:0 0 20px;text-align:center;font-size:14px;color:#6a6a76;line-height:1.7}
+  #token{
+    width:100%;background:#17171c;border:1px solid #2a2a33;color:#e9e9ee;
+    padding:15px 16px;border-radius:12px;font-size:16px;font-family:inherit;text-align:center;
+  }
+  #token:focus{outline:none;border-color:#4a4a58}
+  #enter{width:100%;margin-top:10px;padding:15px;background:#fff;color:#000;font-size:16px;font-weight:600}
+  #enter:disabled{background:#2a2a33;color:#55555f}
+  #gateErr{margin-top:16px;text-align:center;font-size:13px;color:#ff6b61;min-height:1.2em}
+
+  /* ---------- 控制 ---------- */
+  .count{text-align:center;margin-bottom:28px}
+  .count b{display:block;font-size:76px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+  .count span{display:block;margin-top:8px;font-size:13px;color:#71717d;letter-spacing:.14em}
+
+  .trigger{
+    width:100%;padding:30px;font-size:23px;font-weight:700;letter-spacing:.1em;
+    background:#ff3b30;color:#fff;margin-bottom:10px;
+  }
+  .trigger:disabled{background:#2a2a33;color:#55555f;cursor:not-allowed}
+  .sub{width:100%;padding:14px;font-size:15px;background:#1c1c22;color:#9a9aa5;margin-bottom:10px}
+
+  .bar{display:flex;align-items:center;gap:9px;justify-content:center;
+       margin-top:22px;font-size:13px;color:#71717d}
+  .led{width:8px;height:8px;border-radius:50%;background:#6b2f2f}
+  .led.up{background:#34c759}
+  .scene{margin-top:6px;text-align:center;font-size:13px;color:#5a5a65;letter-spacing:.08em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GHOST CALL 控制台</h1>
+
+  <div id="gate">
+    <p>輸入 admin token 才能進入</p>
+    <input id="token" type="password" placeholder="Admin token" autocomplete="off"
+           enterkeyhint="go" autofocus>
+    <button id="enter" disabled>進入</button>
+    <div id="gateErr"></div>
+  </div>
+
+  <div id="panel" hidden>
+    <div class="count"><b id="online">—</b><span>目 前 在 線</span></div>
+    <button class="trigger" id="fire" disabled>觸 發 來 電</button>
+    <button class="sub" id="reset" disabled>全部收回「請看台上」</button>
+    <button class="sub" id="csv">下載名單 CSV</button>
+    <div class="bar"><i class="led" id="led"></i><span id="status">連線中…</span></div>
+    <div class="scene" id="scene"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const room = new URLSearchParams(location.search).get("room") || "main";
+let ws = null, state = { scene: "stage", rev: 0 }, retries = 0, pingId = null;
+let token = "", everOpened = false;
+
+const syncEnter = () => { $("enter").disabled = !$("token").value.trim(); };
+$("token").addEventListener("input", syncEnter);
+$("token").addEventListener("keydown", (e) => { if (e.key === "Enter") tryEnter(); });
+$("enter").onclick = () => tryEnter();
+
+// 記住上次的 token，重整不用再打一次
+try {
+  const saved = localStorage.getItem("ghostcall_token");
+  if (saved) { $("token").value = saved; syncEnter(); tryEnter(); }
+} catch {}
+
+function tryEnter() {
+  const t = $("token").value.trim();
+  if (!t) return;
+  token = t;
+  $("gateErr").textContent = "";
+  $("enter").disabled = true;
+  $("enter").textContent = "驗證中…";
+  everOpened = false;
+  connect();
+}
+
+function gateFailed(msg) {
+  try { localStorage.removeItem("ghostcall_token"); } catch {}
+  $("panel").hidden = true;
+  $("gate").hidden = false;
+  $("enter").disabled = false;
+  $("enter").textContent = "進入";
+  $("gateErr").textContent = msg;
+  syncEnter();
+}
+
+function render() {
+  const ringing = state.scene === "ringing";
+  const live = ws?.readyState === 1;
+  $("fire").textContent = ringing ? "來 電 中" : "觸 發 來 電";
+  $("fire").disabled = !live || ringing;
+  $("reset").disabled = !live || !ringing;
+  $("scene").textContent = `目前場景：${ringing ? "來電中" : "請看台上"}　rev ${state.rev}`;
+}
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(
+    `${proto}://${location.host}/ws?role=admin&room=${encodeURIComponent(room)}` +
+    `&token=${encodeURIComponent(token)}`
+  );
+
+  ws.onopen = () => {
+    // 連得上就代表 token 過了 —— 伺服器對錯的 token 直接回 401，不會升級成 WebSocket
+    everOpened = true;
+    retries = 0;
+    try { localStorage.setItem("ghostcall_token", token); } catch {}
+    $("gate").hidden = true;
+    $("panel").hidden = false;
+    $("led").classList.add("up");
+    $("status").textContent = "已連線";
+    clearInterval(pingId);
+    pingId = setInterval(() => { if (ws?.readyState === 1) ws.send("p"); }, 25000);
+    render();
+  };
+
+  ws.onmessage = (e) => {
+    if (e.data === "P") return;
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.type === "state") { state = { scene: m.scene, rev: m.rev }; render(); }
+    if (m.stats) $("online").textContent = m.stats.online;
+  };
+
+  ws.onclose = () => {
+    clearInterval(pingId);
+    // 從來沒連上過 = token 不對；連上過才掉 = 網路問題，自動重連
+    if (!everOpened) return gateFailed("token 不正確");
+    $("led").classList.remove("up");
+    $("status").textContent = "斷線，重連中…";
+    render();
+    const base = Math.min(1000 * 2 ** retries++, 10000);
+    setTimeout(connect, base * (0.5 + Math.random()));
+  };
+
+  ws.onerror = () => { try { ws.close(); } catch {} };
+}
+
+// fromRev 讓這個動作變成冪等的
+$("fire").onclick = () => {
+  if (!confirm("確定要讓全場手機響起來？")) return;
+  ws?.send(JSON.stringify({ type: "scene", scene: "ringing", fromRev: state.rev }));
+};
+$("reset").onclick = () => {
+  ws?.send(JSON.stringify({ type: "scene", scene: "stage", fromRev: state.rev }));
+};
+$("csv").onclick = () => {
+  location.href = `/export?room=${encodeURIComponent(room)}&token=${encodeURIComponent(token)}`;
+};
+</script>
+</body>
+</html>

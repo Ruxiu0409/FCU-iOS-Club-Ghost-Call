@@ -1,0 +1,70 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一個分支只跑最新一次，避免兩個 deploy 互相蓋掉
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 測試
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # 音檔是固定種子產生的，所以可以驗「改了產生器卻忘了重新產生」
+      - name: 音檔是否與產生器一致
+        run: |
+          node scripts/gen-audio.mjs
+          git diff --exit-code -- public/ \
+            || { echo "::error::public/ 的音檔和 scripts/gen-audio.mjs 對不上，請跑 npm run gen:audio 後一起 commit"; exit 1; }
+
+      # miniflare 在本機跑，不需要任何 Cloudflare 憑證，所以 PR 也測得動
+      - name: 啟動本機 worker
+        run: |
+          echo "ADMIN_TOKEN=citoken" > .dev.vars
+          npx wrangler dev --port 8788 --local > dev.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -sf -o /dev/null http://127.0.0.1:8788/ && exit 0
+            sleep 1
+          done
+          echo "::error::worker 起不來"; cat dev.log; exit 1
+
+      - name: 邊界測試
+        run: ADMIN_TOKEN=citoken npm test
+
+      - name: 失敗時印出 worker log
+        if: failure()
+        run: cat dev.log || true
+
+  deploy:
+    name: 部署到 Cloudflare
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://ghost-call.enokgood2.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: wrangler deploy
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

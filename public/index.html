@@ -12,7 +12,7 @@
   html,body{height:100%;margin:0;overflow:hidden}
   body{
     background:#000;color:#fff;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC",sans-serif;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","PingFang TC","Noto Sans TC",sans-serif;
     -webkit-user-select:none;user-select:none;
   }
   .screen{
@@ -48,44 +48,81 @@
   .dot{width:7px;height:7px;border-radius:50%;background:#2f6b3d;margin-top:44px;animation:pulse 2.4s infinite}
   @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
 
-  /* ---------- 來電 ---------- */
-  #ring{
+  /* ============ 以下照 iOS 的來電／通話畫面做 ============ */
+  /* 沒有聯絡人照片時，iOS 的底是由上而下的深灰漸層，不是純黑 */
+  #ring,#call{
     justify-content:space-between;
-    background:radial-gradient(120% 80% at 50% 0%,#2b2b31 0%,#0a0a0c 62%,#000 100%);
+    background:linear-gradient(180deg,#4a4a4e 0%,#2a2a2e 28%,#141416 62%,#000 100%);
+    padding:calc(var(--safe-t) + 6vh) 0 calc(var(--safe-b) + 26px);
   }
-  .caller{margin-top:9vh;display:flex;flex-direction:column;align-items:center}
-  .avatar{
-    width:118px;height:118px;border-radius:50%;
-    background:linear-gradient(160deg,#4a4a52,#26262c);
+
+  .who-block{display:flex;flex-direction:column;align-items:center;width:100%}
+  .mono{
+    width:112px;height:112px;border-radius:50%;
+    background:linear-gradient(180deg,#8e8e93,#5a5a5f);
     display:flex;align-items:center;justify-content:center;
-    font-size:46px;font-weight:300;color:#d9d9de;margin-bottom:26px;
+    font-size:50px;font-weight:300;color:#fff;margin-bottom:20px;
   }
-  .cname{font-size:33px;font-weight:500;letter-spacing:.02em}
-  .cinfo{margin-top:9px;font-size:15px;color:#9a9aa3;letter-spacing:.06em}
-  .actions{width:100%;max-width:330px;display:flex;justify-content:space-between;margin-bottom:6vh}
-  .act{display:flex;flex-direction:column;align-items:center;gap:11px}
+  /* iOS 的來電者名字是大字但「不粗」，這點最容易做錯 */
+  .cname{font-size:38px;font-weight:400;letter-spacing:-.01em;line-height:1.15;padding:0 20px}
+  .cinfo{margin-top:6px;font-size:19px;font-weight:400;color:rgba(235,235,245,.6)}
+
+  .btn-col{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .btn-col span{font-size:13px;color:#fff}
   .circle{
-    width:76px;height:76px;border-radius:50%;border:none;
-    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    border-radius:50%;border:none;padding:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
   }
-  .circle svg{width:32px;height:32px;fill:#fff}
+  .circle:active{filter:brightness(.82)}
+  .circle svg{fill:#fff}
+
+  /* 次要動作：半透明毛玻璃圓鈕 */
+  .minor-row{display:flex;justify-content:center;gap:74px;margin-bottom:34px}
+  .minor{
+    width:58px;height:58px;
+    background:rgba(255,255,255,.22);
+    -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  }
+  .minor svg{width:26px;height:26px}
+
+  /* 主要動作：iOS 上大約 76pt，靠左右兩側擺 */
+  .main-row{display:flex;justify-content:space-between;padding:0 42px}
+  .big-btn{width:76px;height:76px}
+  .big-btn svg{width:33px;height:33px}
   .decline{background:#ff3b30}
-  .accept{background:#34c759;animation:jiggle 1.4s ease-in-out infinite}
-  @keyframes jiggle{0%,68%,100%{transform:translateY(0)}78%{transform:translateY(-11px)}88%{transform:translateY(-4px)}}
-  .act span{font-size:13px;color:#b9b9c0}
+  .accept{background:#34c759}
 
-  /* ---------- 通話中 ---------- */
-  #call .cname{font-size:29px}
-  .timer{margin-top:12px;font-size:17px;color:#9a9aa3;font-variant-numeric:tabular-nums}
-  .wave{display:flex;gap:5px;align-items:flex-end;height:42px;margin-top:40px}
-  .wave i{width:4px;background:#6a6a74;border-radius:2px;animation:w 1s ease-in-out infinite}
-  .wave i:nth-child(2){animation-delay:.12s}.wave i:nth-child(3){animation-delay:.24s}
-  .wave i:nth-child(4){animation-delay:.36s}.wave i:nth-child(5){animation-delay:.48s}
-  @keyframes w{0%,100%{height:9px}50%{height:40px}}
-  #hangup{margin-top:auto;margin-bottom:6vh;background:#ff3b30}
+  /* ---------- 通話中：iOS 的 3x2 功能格 ---------- */
+  #call .cname{font-size:34px}
+  .timer{margin-top:7px;font-size:19px;color:rgba(235,235,245,.6);font-variant-numeric:tabular-nums}
+  .pad{
+    display:grid;grid-template-columns:repeat(3,76px);
+    justify-content:center;gap:26px 38px;margin-bottom:30px;
+  }
+  .pad .btn-col span{color:rgba(235,235,245,.85)}
+  .fn{
+    width:76px;height:76px;
+    background:rgba(255,255,255,.22);
+    -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  }
+  .fn svg{width:31px;height:31px}
+  .fn.act-on{background:#fff}
+  .fn.act-on svg{fill:#000}
+  .end-row{display:flex;justify-content:center}
 
-  .err{position:fixed;left:0;right:0;bottom:calc(var(--safe-b) + 10px);
+  .err{position:fixed;left:0;right:0;bottom:calc(var(--safe-b) + 6px);
        font-size:12px;color:#8a6d3b;text-align:center;padding:0 20px}
+
+  /* 矮螢幕（Safari 有網址列時空間很緊）縮一點，確保按鈕不會被切掉 */
+  @media (max-height:700px){
+    #ring,#call{padding-top:calc(var(--safe-t) + 3vh)}
+    .mono{width:92px;height:92px;font-size:42px;margin-bottom:14px}
+    .cname{font-size:32px}
+    #call .cname{font-size:28px}
+    .pad{grid-template-columns:repeat(3,68px);gap:18px 32px}
+    .fn{width:68px;height:68px}
+    .minor-row{margin-bottom:24px;gap:64px}
+  }
 </style>
 </head>
 <body>
@@ -109,38 +146,101 @@
   <div class="dot" id="dot"></div>
 </div>
 
+<!-- ===== 來電 ===== -->
 <div class="screen" id="ring">
-  <div class="caller">
-    <div class="avatar" id="avatar">林</div>
+  <div class="who-block">
+    <div class="mono" id="avatar">林</div>
     <div class="cname" id="ringName">林楷祐</div>
-    <div class="cinfo" id="ringInfo">iPhone 來電</div>
+    <div class="cinfo" id="ringInfo">iPhone</div>
   </div>
-  <div class="actions">
-    <div class="act">
-      <button class="circle decline" id="declineBtn" aria-label="拒接">
-        <svg viewBox="0 0 24 24" style="transform:rotate(135deg)"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
-      </button>
-      <span>拒接</span>
+
+  <div style="width:100%">
+    <!-- iOS 在拒絕／接聽上面還有這兩顆，少了它就不像 -->
+    <div class="minor-row">
+      <div class="btn-col">
+        <button class="circle minor" aria-label="提醒我">
+          <svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zm0 15.4a6.9 6.9 0 1 1 0-13.8 6.9 6.9 0 0 1 0 13.8zm.8-11h-1.6v5.2l4.1 2.5.8-1.3-3.3-2z"/><path d="M4.9 1.5 1.4 4.4l1.3 1.5L6.2 3zm14.2 0-1.3 1.5 3.5 2.9 1.3-1.5z"/></svg>
+        </button>
+        <span>提醒我</span>
+      </div>
+      <div class="btn-col">
+        <button class="circle minor" aria-label="訊息">
+          <svg viewBox="0 0 24 24"><path d="M12 3.2c-5.1 0-9.2 3.4-9.2 7.6 0 2.4 1.3 4.5 3.4 5.9-.2 1-.8 2.2-1.7 3.1-.2.2 0 .6.3.5 1.9-.3 3.6-1.1 4.6-1.9.8.2 1.7.3 2.6.3 5.1 0 9.2-3.4 9.2-7.9S17.1 3.2 12 3.2z"/></svg>
+        </button>
+        <span>訊息</span>
+      </div>
     </div>
-    <div class="act">
-      <button class="circle accept" id="acceptBtn" aria-label="接聽">
-        <svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
-      </button>
-      <span>接聽</span>
+
+    <div class="main-row">
+      <div class="btn-col">
+        <button class="circle big-btn decline" id="declineBtn" aria-label="拒絕">
+          <svg viewBox="0 0 24 24" style="transform:rotate(135deg)"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
+        </button>
+        <span>拒絕</span>
+      </div>
+      <div class="btn-col">
+        <button class="circle big-btn accept" id="acceptBtn" aria-label="接聽">
+          <svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
+        </button>
+        <span>接聽</span>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- ===== 通話中 ===== -->
 <div class="screen" id="call">
-  <div class="caller">
-    <div class="avatar" id="avatar2">林</div>
+  <div class="who-block">
     <div class="cname" id="callName">林楷祐</div>
     <div class="timer" id="timer">00:00</div>
-    <div class="wave"><i></i><i></i><i></i><i></i><i></i></div>
   </div>
-  <button class="circle" id="hangup" aria-label="掛斷">
-    <svg viewBox="0 0 24 24" style="transform:rotate(135deg)"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
-  </button>
+
+  <div style="width:100%">
+    <div class="pad">
+      <div class="btn-col">
+        <button class="circle fn" id="muteBtn" aria-label="靜音">
+          <svg viewBox="0 0 24 24"><path d="M12 14.6c1.7 0 3-1.4 3-3.1V5.9c0-1.7-1.3-3.1-3-3.1S9 4.2 9 5.9v5.6c0 1.7 1.3 3.1 3 3.1z"/><path d="M17.4 11.5c0 3-2.4 5.4-5.4 5.4s-5.4-2.4-5.4-5.4H5c0 3.5 2.6 6.5 6 7v3h2v-3c3.4-.5 6-3.5 6-7h-1.6z"/></svg>
+        </button>
+        <span>靜音</span>
+      </div>
+      <div class="btn-col">
+        <button class="circle fn" aria-label="鍵盤">
+          <svg viewBox="0 0 24 24"><circle cx="6" cy="5.5" r="1.9"/><circle cx="12" cy="5.5" r="1.9"/><circle cx="18" cy="5.5" r="1.9"/><circle cx="6" cy="11.5" r="1.9"/><circle cx="12" cy="11.5" r="1.9"/><circle cx="18" cy="11.5" r="1.9"/><circle cx="6" cy="17.5" r="1.9"/><circle cx="12" cy="17.5" r="1.9"/><circle cx="18" cy="17.5" r="1.9"/></svg>
+        </button>
+        <span>鍵盤</span>
+      </div>
+      <div class="btn-col">
+        <button class="circle fn" id="spkBtn" aria-label="擴音">
+          <svg viewBox="0 0 24 24"><path d="M11 4.5 6.8 8H3.5v8h3.3L11 19.5z"/><path d="M15.4 8.6a4.8 4.8 0 0 1 0 6.8l1.3 1.3a6.6 6.6 0 0 0 0-9.4z"/><path d="M18.1 5.9a8.6 8.6 0 0 1 0 12.2l1.3 1.3a10.4 10.4 0 0 0 0-14.8z"/></svg>
+        </button>
+        <span>擴音</span>
+      </div>
+      <div class="btn-col">
+        <button class="circle fn" aria-label="新增通話">
+          <svg viewBox="0 0 24 24"><path d="M11 5h2v14h-2z"/><path d="M5 11h14v2H5z"/></svg>
+        </button>
+        <span>新增通話</span>
+      </div>
+      <div class="btn-col">
+        <button class="circle fn" aria-label="FaceTime">
+          <svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="12.5" height="12" rx="3"/><path d="M16.5 11.2 21.5 8v8l-5-3.2z"/></svg>
+        </button>
+        <span>FaceTime</span>
+      </div>
+      <div class="btn-col">
+        <button class="circle fn" aria-label="聯絡資訊">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M12 13.4c-3.6 0-6.5 2.2-6.5 4.4 0 .9.7 1.2 1.6 1.2h9.8c.9 0 1.6-.3 1.6-1.2 0-2.2-2.9-4.4-6.5-4.4z"/></svg>
+        </button>
+        <span>聯絡資訊</span>
+      </div>
+    </div>
+
+    <div class="end-row">
+      <button class="circle big-btn decline" id="hangup" aria-label="結束">
+        <svg viewBox="0 0 24 24" style="transform:rotate(135deg)"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- 兩個 source：有 ringtone.mp3 就用它，沒有就自動退回合成的 wav。
@@ -157,7 +257,7 @@
 // ===== 要改的東西都在這 =====
 const CONFIG = {
   callerName: "林楷祐",
-  callerInfo: "iPhone 來電",
+  callerInfo: "iPhone",                     // iOS 顯示的是號碼標籤，就是「iPhone」這兩個字
   avatarText: "林",
   recording: "/recording.mp3",              // 放你的錄音；找不到會自動退回下面那個
   fallbackRecording: "/placeholder-recording.wav",
@@ -179,11 +279,16 @@ if (!myId) {
 
 $("ringName").textContent = $("callName").textContent = CONFIG.callerName;
 $("ringInfo").textContent = CONFIG.callerInfo;
-$("avatar").textContent = $("avatar2").textContent = CONFIG.avatarText;
+$("avatar").textContent = CONFIG.avatarText;
 
 function show(id) {
   for (const s of document.querySelectorAll(".screen")) s.classList.toggle("on", s.id === id);
 }
+
+// 只是要看畫面長怎樣時用：?screen=ring 或 ?screen=call。
+// 不會連線也不會出聲，純粹給人看版面。
+const preview = new URLSearchParams(location.search).get("screen");
+if (preview && document.getElementById(preview)) show(preview);
 
 // 記住上次用的暱稱
 try { $("nick").value = localStorage.getItem("ghostcall_name") || ""; } catch {}
@@ -264,6 +369,10 @@ function report(choice) {
 $("acceptBtn").onclick = () => {
   stopRing();
   report("answer");
+  // 每次接聽都把功能格重置，不要把上一輪按過的靜音留著
+  $("muteBtn").classList.remove("act-on");
+  $("spkBtn").classList.remove("act-on");
+  recAudio.muted = false;
   show("call");
   const t0 = Date.now();
   const tick = () => {
@@ -280,6 +389,12 @@ $("acceptBtn").onclick = () => {
 
 $("declineBtn").onclick = () => { stopRing(); report("decline"); show("stage"); };
 $("hangup").onclick = () => { stopRecording(); show("stage"); };
+
+// 靜音是真的會靜音，跟真的通話一樣；其他幾顆只有亮暗
+$("muteBtn").onclick = (e) => {
+  recAudio.muted = e.currentTarget.classList.toggle("act-on");
+};
+$("spkBtn").onclick = (e) => e.currentTarget.classList.toggle("act-on");
 
 function doJoin() {
   if (!validName()) return;

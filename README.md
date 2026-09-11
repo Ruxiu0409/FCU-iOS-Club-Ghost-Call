@@ -57,11 +57,18 @@ npm run deploy
 |---|---|
 | 錄音 | 放成 `public/recording.mp3`，會自動取代預設的佔位音 |
 | 來電者名稱、頭像 | `public/index.html` 最上面的 `CONFIG` |
-| 鈴聲 | 覆蓋 `public/ringtone.wav` |
+| 鈴聲 | 覆蓋 `public/ringtone.mp3` |
 
-內建鈴聲是 `scripts/gen-audio.mjs` 合成的**馬林巴音色原創旋律**，
-不是任何手機廠商鈴聲的複製品。想換成別的直接覆蓋檔案即可。
+頁面用 `<audio>` 的兩個 `<source>`：有 `ringtone.mp3` 就用它，沒有才退回
+`ringtone.wav`。用瀏覽器原生的 fallback，不必 JS 探測，也就沒有「探測還沒
+回來使用者就按了加入」的競態問題。
+
+`ringtone.wav` 是 `scripts/gen-audio.mjs` 合成的馬林巴音色旋律，當作備援。
 改了產生器記得跑 `npm run gen:audio` 重新產生（CI 會驗這兩者一不一致）。
+
+> **素材一定要 commit 進 repo。** CI 是從 git checkout 跑 `wrangler deploy`，
+> 沒進 repo 的檔案會在下次自動部署時從線上被移除 —— 而且因為有 fallback，
+> 不會報錯，只會安靜地換成另一個聲音。
 
 ---
 

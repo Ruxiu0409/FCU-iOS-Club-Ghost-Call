@@ -148,7 +148,13 @@
 
 <div class="screen" id="done"><div class="x">— 通話結束 —</div></div>
 
-<audio id="ringAudio" src="/ringtone.wav" loop preload="auto" playsinline></audio>
+<!-- 兩個 source：有 ringtone.mp3 就用它，沒有就自動退回合成的 wav。
+     用瀏覽器原生的 source fallback，不必用 JS 探測，也就沒有
+     「探測還沒回來使用者就按了加入」的競態問題。 -->
+<audio id="ringAudio" loop preload="auto" playsinline>
+  <source src="/ringtone.mp3" type="audio/mpeg">
+  <source src="/ringtone.wav" type="audio/wav">
+</audio>
 <audio id="recAudio" preload="auto" playsinline></audio>
 <div class="err" id="err"></div>
 

@@ -29,9 +29,13 @@
   #gateErr{margin-top:16px;text-align:center;font-size:13px;color:#ff6b61;min-height:1.2em}
 
   /* ---------- 控制 ---------- */
-  .count{text-align:center;margin-bottom:28px}
-  .count b{display:block;font-size:76px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
-  .count span{display:block;margin-top:8px;font-size:13px;color:#71717d;letter-spacing:.14em}
+  .counts{display:flex;margin-bottom:28px}
+  .counts .c{flex:1;text-align:center}
+  .counts b{display:block;font-size:60px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+  .counts span{display:block;margin-top:8px;font-size:12px;color:#71717d;letter-spacing:.14em}
+  /* 全部載完才轉綠，一眼就知道能不能按 */
+  #ready{color:#e0a33a}
+  #ready.all{color:#34c759}
 
   .trigger{
     width:100%;padding:30px;font-size:23px;font-weight:700;letter-spacing:.1em;
@@ -39,6 +43,8 @@
   }
   .trigger:disabled{background:#2a2a33;color:#55555f;cursor:not-allowed}
   .sub{width:100%;padding:14px;font-size:15px;background:#1c1c22;color:#9a9aa5;margin-bottom:10px}
+  /* 「已經在那個場景」的按鈕要看得出來是暗的，主持人才不會對著沒作用的按鈕重按 */
+  .sub:disabled{background:#141418;color:#4c4c56;cursor:not-allowed}
 
   /* 不可復原的動作，跟其他按鈕拉開距離，避免手滑 */
   .danger{
@@ -68,8 +74,12 @@
   </div>
 
   <div id="panel" hidden>
-    <div class="count"><b id="online">—</b><span>目 前 在 線</span></div>
+    <div class="counts">
+      <div class="c"><b id="online">—</b><span>在 線</span></div>
+      <div class="c"><b id="ready">—</b><span>已 就 緒</span></div>
+    </div>
     <button class="trigger" id="fire" disabled>觸 發 來 電</button>
+    <button class="sub" id="toApp" disabled>切到 App 畫面</button>
     <button class="sub" id="reset" disabled>全部收回「請看台上」</button>
     <button class="sub" id="csv">下載名單 CSV</button>
     <button class="danger" id="wipe">清除名單資料</button>
@@ -82,8 +92,15 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const room = new URLSearchParams(location.search).get("room") || "main";
-let ws = null, state = { scene: "stage", rev: 0 }, retries = 0, pingId = null;
+// 按下去之後延遲這麼久才全場同時響。網路慢 1、2 秒的人照樣跟上，
+// 不會拖成一片零星的鈴聲。
+const FIRE_DELAY = 3000;
+
+let ws = null, state = { scene: "stage", rev: 0, at: 0 }, retries = 0, pingId = null;
 let token = "", everOpened = false;
+let clockOffset = 0, bestRtt = Infinity;   // 伺服器時間 ≈ 本機時間 + clockOffset
+
+const remaining = () => Math.max(0, state.at - clockOffset - Date.now());
 
 const syncEnter = () => { $("enter").disabled = !$("token").value.trim(); };
 $("token").addEventListener("input", syncEnter);
@@ -117,14 +134,24 @@ function gateFailed(msg) {
   syncEnter();
 }
 
+const SCENE_NAME = { stage: "請看台上", ringing: "來電中", app: "App 畫面" };
+
 function render() {
   const ringing = state.scene === "ringing";
   const live = ws?.readyState === 1;
-  $("fire").textContent = ringing ? "來 電 中" : "觸 發 來 電";
+  const left = ringing ? remaining() : 0;
+  $("fire").textContent = left > 0
+    ? `${Math.ceil(left / 1000)} 秒 後 響 起`
+    : (ringing ? "來 電 中" : "觸 發 來 電");
   $("fire").disabled = !live || ringing;
-  $("reset").disabled = !live || !ringing;
-  $("scene").textContent = `目前場景：${ringing ? "來電中" : "請看台上"}　rev ${state.rev}`;
+  // 每顆按鈕在「已經在那個場景」時就關掉，按下去也沒事，但手指知道沒事可做
+  $("toApp").disabled = !live || state.scene === "app";
+  $("reset").disabled = !live || state.scene === "stage";
+  $("scene").textContent =
+    `目前場景：${SCENE_NAME[state.scene] ?? state.scene}　rev ${state.rev}`;
 }
+// 倒數期間要持續重畫
+setInterval(() => { if (state.scene === "ringing" && remaining() > 0) render(); }, 150);
 
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -144,14 +171,23 @@ function connect() {
     $("status").textContent = "已連線";
     clearInterval(pingId);
     pingId = setInterval(() => { if (ws?.readyState === 1) ws.send("p"); }, 25000);
+    for (let i = 0; i < 3; i++) setTimeout(() => ws?.send(JSON.stringify({ type: "sync", c: Date.now() })), i * 400);
     render();
   };
 
   ws.onmessage = (e) => {
     if (e.data === "P") return;
     let m; try { m = JSON.parse(e.data); } catch { return; }
-    if (m.type === "state") { state = { scene: m.scene, rev: m.rev }; render(); }
-    if (m.stats) $("online").textContent = m.stats.online;
+    if (m.type === "state") { state = { scene: m.scene, rev: m.rev, at: m.at ?? 0 }; render(); }
+    if (m.type === "sync") {
+      const rtt = Date.now() - m.c;
+      if (rtt < bestRtt) { bestRtt = rtt; clockOffset = m.s - (m.c + rtt / 2); }
+    }
+    if (m.stats) {
+      $("online").textContent = m.stats.online;
+      $("ready").textContent = m.stats.ready;
+      $("ready").classList.toggle("all", m.stats.online > 0 && m.stats.ready === m.stats.online);
+    }
     if (m.type === "wiped") {
       $("note").textContent =
         `已清除 ${m.removed} 筆` + (m.kept ? `，現場 ${m.kept} 人重新登記` : "");
@@ -175,8 +211,14 @@ function connect() {
 
 // fromRev 讓這個動作變成冪等的
 $("fire").onclick = () => {
-  if (!confirm("確定要讓全場手機響起來？")) return;
-  ws?.send(JSON.stringify({ type: "scene", scene: "ringing", fromRev: state.rev }));
+  const s = $("ready").textContent, o = $("online").textContent;
+  if (!confirm(`確定要讓全場手機響起來？\n\n在線 ${o} 人，其中 ${s} 人音檔已載完。\n還沒載完的人接聽後會沒有聲音。`)) return;
+  ws?.send(JSON.stringify({
+    type: "scene", scene: "ringing", fromRev: state.rev, delay: FIRE_DELAY,
+  }));
+};
+$("toApp").onclick = () => {
+  ws?.send(JSON.stringify({ type: "scene", scene: "app", fromRev: state.rev }));
 };
 $("reset").onclick = () => {
   ws?.send(JSON.stringify({ type: "scene", scene: "stage", fromRev: state.rev }));

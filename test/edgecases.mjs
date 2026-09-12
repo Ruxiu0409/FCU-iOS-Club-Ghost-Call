@@ -35,13 +35,16 @@ function open(url) {
     ws.onmessage = (e) => {
       if (e.data === "P") return;
       const m = JSON.parse(e.data);
-      if (m.type === "state") o.states.push({ scene: m.scene, rev: m.rev });
+      if (m.type === "state") { o.states.push({ scene: m.scene, rev: m.rev }); o.lastAt = m.at; }
+      if (m.type === "sync") o.sync = m;
       if (m.type === "joined") o.joined = m.name;
       if (m.stats) o.stats = m.stats;
       if (m.type === "wiped") o.wiped = m;
     };
     o.join = (id, name) => ws.send(JSON.stringify({ type: "join", id, name }));
     o.pick = (choice, rev) => ws.send(JSON.stringify({ type: "choice", choice, rev }));
+    o.ready = () => ws.send(JSON.stringify({ type: "ready" }));
+    o.doSync = () => ws.send(JSON.stringify({ type: "sync", c: Date.now() }));
     return o;
   });
 }
@@ -49,6 +52,7 @@ const guest = () => open(`${HOST}/ws?room=${ROOM}`);
 const admin = () => open(`${HOST}/ws?role=admin&room=${ROOM}&token=${TOKEN}`);
 const last = (o) => () => o.states.at(-1);
 const online = (o) => () => o.stats?.online;
+const readyN = (o) => () => o.stats?.ready;
 
 async function csvRows() {
   const res = await fetch(`${HTTP}/export?room=${ROOM}&token=${TOKEN}`);
@@ -78,6 +82,20 @@ check("還沒報暱稱不算在線", a.stats.online, 0);
 g1.join("dev-1", "小明");
 check("報了暱稱才算在線", await until(online(a), eq(1)), 1);
 check("伺服器確認收到暱稱", await until(() => g1.joined, eq("小明")), "小明");
+
+// --- 在線不等於準備好 ---
+check("剛加入時還沒就緒", a.stats.ready, 0);
+g1.ready();
+check("回報音檔載完才算就緒", await until(readyN(a), eq(1)), 1);
+g1.ready();
+await sleep(200);
+check("重複回報就緒不會重複計算", a.stats.ready, 1);
+
+// --- 對時 ---
+g1.doSync();
+const sy = await until(() => g1.sync, (v) => !!v);
+check("對時會把送出的時間原樣帶回來", typeof sy.c, "number");
+check("對時有帶伺服器時間", Math.abs(sy.s - Date.now()) < 60000, true);
 
 // --- 觸發 ---
 a.ws.send(JSON.stringify({ type: "scene", scene: "ringing", fromRev: 0 }));
@@ -152,6 +170,54 @@ check("清除後沒有殘留的來電輪次欄位", after.rows[0], ["暱稱", "�
 check("清除後名單只剩現場連著的人", after.rows.length - 1, 2);
 check("名字還在（不是變成空白列）",
   [after.rows[1][0], after.rows[2][0]].sort(), ["小明", "阿美"].sort());
+
+// --- 預約觸發：約好時間一起響，不是收到就響 ---
+const fireRev = late.states.at(-1).rev;
+a.ws.send(JSON.stringify({
+  type: "scene", scene: "ringing", fromRev: fireRev, delay: 1500,
+}));
+await until(last(late), (v) => v?.scene === "ringing");
+const lead = late.lastAt - Date.now();
+check("預約觸發的 at 落在未來", lead > 700 && lead <= 1700, true);
+
+// 重連的人拿到的是同一個 at，不會各響各的
+const rejoin = await guest();
+rejoin.join("dev-3", "阿華");
+await until(last(rejoin), (v) => v?.scene === "ringing");
+check("中途進來的人拿到同一個觸發時間", rejoin.lastAt, late.lastAt);
+
+// 不帶 delay 就是立刻
+a.ws.send(JSON.stringify({ type: "scene", scene: "stage", fromRev: late.states.at(-1).rev }));
+await until(last(late), (v) => v?.scene === "stage");
+check("不帶 delay 時 at 就是現在", Math.abs(late.lastAt - Date.now()) < 3000, true);
+
+// --- App 畫面：第三個場景 ---
+const appRev = late.states.at(-1).rev + 1;
+a.ws.send(JSON.stringify({ type: "scene", scene: "app", fromRev: appRev - 1 }));
+check("切到 App 畫面",
+  await until(last(late), eq({ scene: "app", rev: appRev })), { scene: "app", rev: appRev });
+
+const g4 = await guest();
+g4.join("dev-4", "阿吉");
+check("中途進來的人直接看到 App 畫面",
+  await until(last(g4), eq({ scene: "app", rev: appRev })), { scene: "app", rev: appRev });
+
+const beforeApp = late.states.length;
+a.ws.send(JSON.stringify({ type: "scene", scene: "app", fromRev: appRev }));
+await sleep(600);
+check("重按不會把已經在 App 畫面的人再推一次", late.states.length, beforeApp);
+
+// 主持人打錯字不該讓全場卡在一個沒人認得的場景
+a.ws.send(JSON.stringify({ type: "scene", scene: "沒這個場景", fromRev: appRev }));
+check("不認得的場景一律當成請看台上",
+  await until(last(late), eq({ scene: "stage", rev: appRev + 1 })),
+  { scene: "stage", rev: appRev + 1 });
+
+// App 畫面不是一輪來電，不該在 CSV 多長出一欄沒人接的紀錄
+const colsBefore = (await csvRows()).rows[0].length;
+a.ws.send(JSON.stringify({ type: "scene", scene: "app", fromRev: appRev + 1 }));
+await until(last(late), (v) => v?.scene === "app");
+check("切到 App 畫面不會多記一輪來電", (await csvRows()).rows[0].length, colsBefore);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

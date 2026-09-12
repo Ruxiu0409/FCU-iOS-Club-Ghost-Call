@@ -1,4 +1,7 @@
-const DEFAULT_STATE = { scene: "stage", rev: 0 };
+const DEFAULT_STATE = { scene: "stage", rev: 0, at: 0 };
+// 認得的場景。不在名單裡的一律當成 stage，主持人打錯字不會讓全場卡住。
+const SCENES = new Set(["stage", "ringing", "app"]);
+const MAX_DELAY = 10000;
 const MAX_NAME = 24;
 const BOM = "\uFEFF";
 
@@ -44,17 +47,20 @@ export class Room {
     return this.sql.exec(q, ...b).toArray();
   }
 
-  // 控制台只要在線人數。接聽/拒接照樣寫進 DB 供事後匯出，但不即時推給
-  // admin —— 省掉「每有一個人回報就送一次全場名單」的開銷。
-  onlineCount() {
-    const ids = new Set();
+  // 接聽/拒接照樣寫進 DB 供事後匯出，但不即時推給 admin ——
+  // 省掉「每有一個人回報就送一次全場名單」的開銷。
+  // ready 是「音檔已經下載完」，在線不等於準備好。
+  counts() {
+    const online = new Set(), ready = new Set();
     for (const ws of this.ctx.getWebSockets("guest")) {
       if (ws.readyState !== 1) continue;
       let a;
       try { a = ws.deserializeAttachment(); } catch { continue; }
-      if (a?.id && a?.name) ids.add(a.id);   // 同一人開兩個分頁不重複計
+      if (!a?.id || !a?.name) continue;
+      online.add(a.id);                      // 同一人開兩個分頁不重複計
+      if (a.ready) ready.add(a.id);
     }
-    return ids.size;
+    return { online: online.size, ready: ready.size };
   }
 
   broadcast(payload, tag) {
@@ -65,7 +71,7 @@ export class Room {
   }
 
   pushAdmin() {
-    this.broadcast({ type: "stats", stats: { online: this.onlineCount() } }, "admin");
+    this.broadcast({ type: "stats", stats: this.counts() }, "admin");
   }
 
   async fetch(request) {
@@ -86,7 +92,7 @@ export class Room {
     server.send(JSON.stringify({
       type: "state",
       ...state,
-      ...(role === "admin" ? { stats: { online: this.onlineCount() } } : {}),
+      ...(role === "admin" ? { stats: this.counts() } : {}),
     }));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -97,6 +103,12 @@ export class Room {
     const att = ws.deserializeAttachment() ?? {};
     const state = await this.getState();
 
+    // NTP 式對時：客戶端用 RTT 推算自己跟伺服器的時差
+    if (msg.type === "sync") {
+      ws.send(JSON.stringify({ type: "sync", c: msg.c, s: Date.now() }));
+      return;
+    }
+
     if (att.role === "guest") return this.onGuest(ws, att, msg, state);
     if (att.role !== "admin") return;
 
@@ -104,15 +116,18 @@ export class Room {
       // 帶著你看到的 rev 來；對不上代表狀態已經被改過了
       if (typeof msg.fromRev === "number" && msg.fromRev !== state.rev) {
         ws.send(JSON.stringify({
-          type: "state", ...state, stats: { online: this.onlineCount() },
+          type: "state", ...state, stats: this.counts(),
         }));
         return;
       }
-      const scene = msg.scene === "ringing" ? "ringing" : "stage";
+      const scene = SCENES.has(msg.scene) ? msg.scene : "stage";
       // 已經在這個場景就不動作，否則重按會讓全場再響一遍
       if (scene === state.scene) return;
 
-      const next = { scene, rev: state.rev + 1 };
+      const delay = scene === "ringing"
+        ? Math.min(MAX_DELAY, Math.max(0, Number(msg.delay) || 0))
+        : 0;
+      const next = { scene, rev: state.rev + 1, at: Date.now() + delay };
       await this.ctx.storage.put("state", next);
       if (scene === "ringing") {
         this.sql.exec(
@@ -122,7 +137,7 @@ export class Room {
       }
       this.broadcast({ type: "state", ...next });
       this.broadcast(
-        { type: "state", ...next, stats: { online: this.onlineCount() } }, "admin"
+        { type: "state", ...next, stats: this.counts() }, "admin"
       );
       return;
     }
@@ -157,11 +172,11 @@ export class Room {
 
     // 一併收回到看台上。若正響到一半就清掉 rounds，那一輪的回報會被記進
     // 一個 CSV 裡沒有對應欄位的 rev，變成查不到的孤兒資料。
-    const next = { scene: "stage", rev: state.rev + 1 };
+    const next = { scene: "stage", rev: state.rev + 1, at: Date.now() };
     await this.ctx.storage.put("state", next);
     this.broadcast({ type: "state", ...next });
     this.broadcast(
-      { type: "state", ...next, stats: { online: this.onlineCount() } }, "admin"
+      { type: "state", ...next, stats: this.counts() }, "admin"
     );
     ws.send(JSON.stringify({ type: "wiped", removed, kept }));
   }
@@ -180,6 +195,13 @@ export class Room {
       );
       ws.serializeAttachment({ ...att, id, name });
       ws.send(JSON.stringify({ type: "joined", name }));
+      this.pushAdmin();
+      return;
+    }
+
+    if (msg.type === "ready") {
+      if (!att.id || att.ready) return;
+      ws.serializeAttachment({ ...att, ready: true });
       this.pushAdmin();
       return;
     }

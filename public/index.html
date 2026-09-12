@@ -113,6 +113,52 @@
   .err{position:fixed;left:0;right:0;bottom:calc(var(--safe-b) + 6px);
        font-size:12px;color:#8a6d3b;text-align:center;padding:0 20px}
 
+  /* ============ 模擬 App：照 iOS 深色 insetGrouped 清單做 ============ */
+  /* 這一頁是唯一要捲動的畫面，所以不跟其他畫面一樣置中，改成上中下撐滿 */
+  #app{
+    padding:0;background:#000;
+    align-items:stretch;justify-content:flex-start;text-align:left;
+  }
+  .navbar{flex:none;padding:calc(var(--safe-t) + 12px) 20px 6px}
+  .navbar .eyebrow{font-size:13px;color:#8e8e93;letter-spacing:.02em}
+  .navbar h2{margin:1px 0 0;font-size:33px;font-weight:700;letter-spacing:-.02em;color:#fff}
+
+  /* 兩個分頁各自保留自己的捲動位置，跟原生 TabView 一樣 */
+  .pane{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 16px 26px}
+  .pane[hidden]{display:none}
+  .lead{margin:0 4px 18px;font-size:15px;line-height:1.55;color:#98989f}
+  .sec{margin:0 4px 7px;font-size:13px;color:#8e8e93;letter-spacing:.02em}
+
+  .list{background:#1c1c1e;border-radius:11px;overflow:hidden}
+  .row{display:flex;align-items:center;gap:12px;padding:12px 15px;position:relative}
+  /* iOS 的分隔線從文字起點開始，不是整條拉到底 */
+  .row + .row::before{content:"";position:absolute;left:15px;right:0;top:0;height:.5px;background:#38383a}
+  .row-main{flex:1;min-width:0}
+  .row-title{font-size:17px;line-height:1.3;color:#fff}
+  .row-detail{margin-top:3px;font-size:13px;line-height:1.45;color:#8e8e93}
+  .badge{
+    flex:none;font-size:12px;font-weight:600;padding:3px 8px;border-radius:7px;
+    color:#0a84ff;background:rgba(10,132,255,.16);
+  }
+  /* 舊的那頁用灰的；兩頁來回切的時候，顏色比文字更快讓人分辨現在在哪 */
+  #pane-old .badge{color:#8e8e93;background:rgba(142,142,147,.18)}
+  .foot{margin:14px 4px 0;font-size:12px;line-height:1.6;color:#636369}
+
+  .tabbar{
+    display:flex;flex:none;border-top:.5px solid #2c2c2e;
+    background:rgba(20,20,22,.94);
+    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+    padding-bottom:var(--safe-b);
+  }
+  .tab{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:7px 0 4px;border:none;background:none;color:#8e8e93;
+    font-family:inherit;cursor:pointer;
+  }
+  .tab svg{width:26px;height:26px;fill:currentColor}
+  .tab span{font-size:10px;font-weight:500}
+  .tab.sel{color:#0a84ff}
+
   /* 矮螢幕（Safari 有網址列時空間很緊）縮一點，確保按鈕不會被切掉 */
   @media (max-height:700px){
     #ring,#call{padding-top:calc(var(--safe-t) + 3vh)}
@@ -243,6 +289,29 @@
   </div>
 </div>
 
+<!-- ===== 模擬 App：讓台下自己切著看新舊差在哪 ===== -->
+<div class="screen" id="app">
+  <div class="navbar">
+    <div class="eyebrow" id="appName"></div>
+    <h2 id="appTitle"></h2>
+  </div>
+
+  <!-- 兩個 pane 都留在 DOM 裡，切回來時捲動位置還在 -->
+  <div class="pane" id="pane-new" role="tabpanel" aria-labelledby="tab-new"></div>
+  <div class="pane" id="pane-old" role="tabpanel" aria-labelledby="tab-old" hidden></div>
+
+  <div class="tabbar" role="tablist">
+    <button class="tab sel" id="tab-new" data-tab="new" role="tab" aria-selected="true">
+      <svg viewBox="0 0 24 24"><path d="M10.5 4.2l1.7 5.6 5.6 1.7-5.6 1.7-1.7 5.6-1.7-5.6-5.6-1.7 5.6-1.7z"/><path d="M18.8 2.4l.8 2.8 2.8.8-2.8.8-.8 2.8-.8-2.8-2.8-.8 2.8-.8z"/></svg>
+      <span></span>
+    </button>
+    <button class="tab" id="tab-old" data-tab="old" role="tab" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5A8.5 8.5 0 0 0 12 3.5zm0 15.4a6.9 6.9 0 1 1 6.9-6.9 6.9 6.9 0 0 1-6.9 6.9z"/><path d="M12.8 7.5h-1.6v5.2l4.1 2.5.8-1.3-3.3-2z"/></svg>
+      <span></span>
+    </button>
+  </div>
+</div>
+
 <!-- 兩個 source：有 ringtone.mp3 就用它，沒有就自動退回合成的 wav。
      用瀏覽器原生的 source fallback，不必用 JS 探測，也就沒有
      「探測還沒回來使用者就按了加入」的競態問題。 -->
@@ -263,12 +332,63 @@ const CONFIG = {
   fallbackRecording: "/placeholder-recording.wav",
   room: new URLSearchParams(location.search).get("room") || "main",
 };
+
+// 模擬 App 畫面的內容全部從這裡出來。想換就改這一塊，不用動下面的程式。
+// items 每一列：title 必填，detail、badge 可省略。
+const APP_CONFIG = {
+  appName: "我的 App",
+  tabs: {
+    new: {
+      title: "新的",                     // 分頁列上的字
+      nav: "新版",                       // 切到這頁時的大標題
+      lead: "改版後長這樣。",
+      section: "這一版改了什麼",
+      items: [
+        { title: "第一個改動", detail: "一句話說明它解決了什麼", badge: "NEW" },
+        { title: "第二個改動", detail: "一句話說明它解決了什麼", badge: "NEW" },
+        { title: "第三個改動", detail: "一句話說明它解決了什麼" },
+      ],
+      foot: "改 index.html 最上面的 APP_CONFIG 就會換掉這兩頁。",
+    },
+    old: {
+      title: "舊的",
+      nav: "舊版",
+      lead: "改版前長這樣。",
+      section: "原本是怎麼做的",
+      items: [
+        { title: "第一個改動", detail: "原本的做法，以及卡在哪", badge: "舊" },
+        { title: "第二個改動", detail: "原本的做法，以及卡在哪", badge: "舊" },
+        { title: "第三個改動", detail: "原本的做法，以及卡在哪" },
+      ],
+    },
+  },
+};
 // ============================
 
 const $ = (id) => document.getElementById(id);
 const ringAudio = $("ringAudio"), recAudio = $("recAudio");
 let rev = -1, myChoice = null, ws = null, timerId = null, wakeLock = null;
-let myName = "";
+let myName = "", ringTimer = null;
+
+// 對時：每支手機的系統時間都不一樣，要能換算成伺服器時間，
+// 才有辦法「大家同一刻響」。用 RTT 折半估時差，取最快那一次。
+let clockOffset = 0, bestRtt = Infinity;   // 伺服器時間 ≈ 本機時間 + clockOffset
+
+// 音檔載完才算準備好。在線不等於準備好 —— 還在下載的人接了會是一片安靜。
+let audioReady = false;
+function checkAudioReady() {
+  if (audioReady) return;
+  if (ringAudio.readyState >= 4 && recAudio.readyState >= 4) {
+    audioReady = true;
+    send({ type: "ready" });
+  }
+}
+for (const el of [ringAudio, recAudio]) {
+  el.addEventListener("canplaythrough", checkAudioReady);
+  el.addEventListener("loadeddata", checkAudioReady);
+}
+// 事件有可能在掛上監聽之前就觸發過（例如檔案已在快取），所以再輪詢兜底
+setInterval(checkAudioReady, 2000);
 
 // 裝置 id 存在 localStorage：斷線重連回來還是同一個人，不會被算成兩個
 let myId = localStorage.getItem("ghostcall_id");
@@ -285,7 +405,63 @@ function show(id) {
   for (const s of document.querySelectorAll(".screen")) s.classList.toggle("on", s.id === id);
 }
 
-// 只是要看畫面長怎樣時用：?screen=ring 或 ?screen=call。
+// ---------- 模擬 App ----------
+const node = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+};
+
+// 用 DOM API 組，不走 innerHTML —— APP_CONFIG 裡打了 < 或 & 也不會把版面弄壞
+function buildPane(pane, tab) {
+  pane.replaceChildren();
+  if (tab.lead) pane.append(node("p", "lead", tab.lead));
+  if (tab.section) pane.append(node("div", "sec", tab.section));
+  const list = node("div", "list");
+  for (const it of tab.items ?? []) {
+    const row = node("div", "row");
+    const main = node("div", "row-main");
+    main.append(node("div", "row-title", it.title));
+    if (it.detail) main.append(node("div", "row-detail", it.detail));
+    row.append(main);
+    if (it.badge) row.append(node("span", "badge", it.badge));
+    list.append(row);
+  }
+  pane.append(list);
+  if (tab.foot) pane.append(node("p", "foot", tab.foot));
+}
+
+function selectTab(key) {
+  const tab = APP_CONFIG.tabs[key];
+  if (!tab) return;
+  for (const b of document.querySelectorAll(".tab")) {
+    const on = b.dataset.tab === key;
+    b.classList.toggle("sel", on);
+    b.setAttribute("aria-selected", String(on));
+  }
+  $("pane-new").hidden = key !== "new";
+  $("pane-old").hidden = key !== "old";
+  $("appTitle").textContent = tab.nav || tab.title;
+}
+
+$("appName").textContent = APP_CONFIG.appName;
+for (const key of ["new", "old"]) {
+  const tab = APP_CONFIG.tabs[key];
+  $(`tab-${key}`).querySelector("span").textContent = tab.title;
+  $(`tab-${key}`).onclick = () => selectTab(key);
+  buildPane($(`pane-${key}`), tab);
+}
+selectTab("new");
+
+// 每次切進來都從「新的」開始，不要留著上一輪停在哪一頁、捲到哪裡
+function showApp() {
+  selectTab("new");
+  $("pane-new").scrollTop = $("pane-old").scrollTop = 0;
+  show("app");
+}
+
+// 只是要看畫面長怎樣時用：?screen=ring、?screen=call 或 ?screen=app。
 // 不會連線也不會出聲，純粹給人看版面。
 const preview = new URLSearchParams(location.search).get("screen");
 if (preview && document.getElementById(preview)) show(preview);
@@ -330,14 +506,31 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ---------- 場景切換 ----------
+// 從伺服器給的 at 算出這支手機還要等多久才響。
+// 防呆很重要：手機時鐘本身不準的話，算出來會是個荒謬的數字，
+// 那個人就永遠不會響 —— 而你在現場完全看不出來。所以超出
+// 伺服器允許的最大延遲就當作時鐘壞了，寧可立刻響。
+// （test/schedule.mjs 會把這個函式原封不動抽出來驗，不要改名）
+function ringDelay(at, offset, now) {
+  const raw = at - offset - now;
+  return raw < 0 || raw > 12000 ? 0 : raw;
+}
+
 function applyState(st) {
   if (st.rev === rev) return;
   rev = st.rev;
   myChoice = null;
+  clearTimeout(ringTimer);
   stopRing();
   stopRecording();
-  if (st.scene === "ringing") startRinging();
-  else show("stage");
+
+  if (st.scene === "app") return showApp();
+  if (st.scene !== "ringing") { show("stage"); return; }
+
+  const wait = ringDelay(st.at ?? 0, clockOffset, Date.now());
+  if (wait < 30) return startRinging();
+  show("stage");                       // 還沒到時間，畫面先不要動
+  ringTimer = setTimeout(startRinging, wait);
 }
 
 function startRinging() {
@@ -427,6 +620,9 @@ function ensureSocket() {
     $("dot").style.background = "#2f6b3d";
     // 每次連上都要重報一次：伺服器端重連後是一條全新的連線，不記得你是誰
     send({ type: "join", id: myId, name: myName });
+    // 重連後伺服器是一條全新連線，不記得你載好音檔了，要重報
+    if (audioReady) send({ type: "ready" });
+    for (let i = 0; i < 3; i++) setTimeout(() => send({ type: "sync", c: Date.now() }), i * 400);
     clearInterval(pingId);
     // "p" 走 DO 的 auto-response：不喚醒物件、不計費
     pingId = setInterval(() => { if (ws?.readyState === 1) ws.send("p"); }, 25000);
@@ -436,6 +632,10 @@ function ensureSocket() {
     if (e.data === "P") return;
     let m; try { m = JSON.parse(e.data); } catch { return; }
     if (m.type === "state") applyState(m);
+    if (m.type === "sync") {
+      const rtt = Date.now() - m.c;
+      if (rtt < bestRtt) { bestRtt = rtt; clockOffset = m.s - (m.c + rtt / 2); }
+    }
   };
 
   ws.onclose = () => {

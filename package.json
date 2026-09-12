@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node test/edgecases.mjs",
+    "test": "node test/schedule.mjs && node test/edgecases.mjs",
     "test:load": "node test/loadtest.mjs 400",
     "gen:audio": "node scripts/gen-audio.mjs",
     "test:latency": "node test/measure.mjs 12",

@@ -124,7 +124,10 @@
   .navbar h2{margin:1px 0 0;font-size:33px;font-weight:700;letter-spacing:-.02em;color:#fff}
 
   /* 兩個分頁各自保留自己的捲動位置，跟原生 TabView 一樣 */
-  .pane{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 16px 26px}
+  .pane{
+    flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:10px 16px calc(var(--safe-b) + 92px);   /* 墊出膠囊的高度，最後一列才不會被蓋住 */
+  }
   .pane[hidden]{display:none}
   .lead{margin:0 4px 18px;font-size:15px;line-height:1.55;color:#98989f}
   .sec{margin:0 4px 7px;font-size:13px;color:#8e8e93;letter-spacing:.02em}
@@ -144,20 +147,34 @@
   #pane-old .badge{color:#8e8e93;background:rgba(142,142,147,.18)}
   .foot{margin:14px 4px 0;font-size:12px;line-height:1.6;color:#636369}
 
+  /* iOS 26 之後的 Liquid Glass：分頁列不再貼著螢幕底，
+     而是一顆浮在內容上的膠囊，內容從它底下捲過去 */
   .tabbar{
-    display:flex;flex:none;border-top:.5px solid #2c2c2e;
-    background:rgba(20,20,22,.94);
-    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
-    padding-bottom:var(--safe-b);
+    position:absolute;left:0;right:0;bottom:calc(var(--safe-b) + 10px);
+    display:flex;justify-content:center;
+    pointer-events:none;               /* 膠囊以外的地方要讓得出去，不要擋住內容 */
+  }
+  .tabglass{
+    display:inline-flex;gap:4px;padding:6px;border-radius:999px;pointer-events:auto;
+    background:rgba(58,58,64,.42);
+    -webkit-backdrop-filter:blur(26px) saturate(180%);backdrop-filter:blur(26px) saturate(180%);
+    /* 上緣那道亮邊跟外圈陰影是玻璃的重點：少了它就只是一塊灰方塊 */
+    border:.5px solid rgba(255,255,255,.16);
+    box-shadow:0 10px 30px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.18);
   }
   .tab{
-    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
-    padding:7px 0 4px;border:none;background:none;color:#8e8e93;
-    font-family:inherit;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+    padding:8px 22px;border:none;background:none;border-radius:999px;
+    color:#b9b9c0;font-family:inherit;cursor:pointer;
+    transition:background .22s ease,color .22s ease;
   }
-  .tab svg{width:26px;height:26px;fill:currentColor}
+  .tab svg{width:25px;height:25px;fill:currentColor}
   .tab span{font-size:10px;font-weight:500}
-  .tab.sel{color:#0a84ff}
+  /* 選中的那顆自己又是一片玻璃，疊在膠囊上 */
+  .tab.sel{
+    color:#0a84ff;background:rgba(255,255,255,.22);
+    box-shadow:inset 0 .5px 0 rgba(255,255,255,.32);
+  }
 
   /* 矮螢幕（Safari 有網址列時空間很緊）縮一點，確保按鈕不會被切掉 */
   @media (max-height:700px){
@@ -297,18 +314,20 @@
   </div>
 
   <!-- 兩個 pane 都留在 DOM 裡，切回來時捲動位置還在 -->
-  <div class="pane" id="pane-new" role="tabpanel" aria-labelledby="tab-new"></div>
   <div class="pane" id="pane-old" role="tabpanel" aria-labelledby="tab-old" hidden></div>
+  <div class="pane" id="pane-new" role="tabpanel" aria-labelledby="tab-new"></div>
 
-  <div class="tabbar" role="tablist">
-    <button class="tab sel" id="tab-new" data-tab="new" role="tab" aria-selected="true">
-      <svg viewBox="0 0 24 24"><path d="M10.5 4.2l1.7 5.6 5.6 1.7-5.6 1.7-1.7 5.6-1.7-5.6-5.6-1.7 5.6-1.7z"/><path d="M18.8 2.4l.8 2.8 2.8.8-2.8.8-.8 2.8-.8-2.8-2.8-.8 2.8-.8z"/></svg>
-      <span></span>
-    </button>
+  <div class="tabbar">
+   <div class="tabglass" role="tablist">
     <button class="tab" id="tab-old" data-tab="old" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5A8.5 8.5 0 0 0 12 3.5zm0 15.4a6.9 6.9 0 1 1 6.9-6.9 6.9 6.9 0 0 1-6.9 6.9z"/><path d="M12.8 7.5h-1.6v5.2l4.1 2.5.8-1.3-3.3-2z"/></svg>
       <span></span>
     </button>
+    <button class="tab sel" id="tab-new" data-tab="new" role="tab" aria-selected="true">
+      <svg viewBox="0 0 24 24"><path d="M10.5 4.2l1.7 5.6 5.6 1.7-5.6 1.7-1.7 5.6-1.7-5.6-5.6-1.7 5.6-1.7z"/><path d="M18.8 2.4l.8 2.8 2.8.8-2.8.8-.8 2.8-.8-2.8-2.8-.8 2.8-.8z"/></svg>
+      <span></span>
+    </button>
+   </div>
   </div>
 </div>
 
@@ -335,6 +354,7 @@ const CONFIG = {
 
 // 模擬 App 畫面的內容全部從這裡出來。想換就改這一塊，不用動下面的程式。
 // items 每一列：title 必填，detail、badge 可省略。
+// 分頁列上的左右順序是「舊的、新的」，固定在 HTML 那邊，跟這裡的鍵值順序無關。
 const APP_CONFIG = {
   appName: "我的 App",
   tabs: {
@@ -452,6 +472,8 @@ for (const key of ["new", "old"]) {
   $(`tab-${key}`).onclick = () => selectTab(key);
   buildPane($(`pane-${key}`), tab);
 }
+// 分頁列上舊的在左、新的在右，左到右就是改版前後；但落地停在「新的」那頁。
+// 想改成一進來先看舊版，把這兩處的 "new" 換成 "old" 就好。
 selectTab("new");
 
 // 每次切進來都從「新的」開始，不要留著上一輪停在哪一頁、捲到哪裡

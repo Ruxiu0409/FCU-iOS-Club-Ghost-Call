@@ -207,15 +207,29 @@ a.ws.send(JSON.stringify({ type: "scene", scene: "app", fromRev: appRev }));
 await sleep(600);
 check("重按不會把已經在 App 畫面的人再推一次", late.states.length, beforeApp);
 
+// --- 新聞頁：第四個場景 ---
+const newsRev = appRev + 1;
+const colsBeforeNews = (await csvRows()).rows[0].length;
+a.ws.send(JSON.stringify({ type: "scene", scene: "news", fromRev: appRev }));
+check("切到新聞頁",
+  await until(last(late), eq({ scene: "news", rev: newsRev })), { scene: "news", rev: newsRev });
+// 新聞頁跟 App 畫面一樣不是一輪來電
+check("切到新聞頁不會多記一輪來電", (await csvRows()).rows[0].length, colsBeforeNews);
+
+const g5 = await guest();
+g5.join("dev-5", "小柚");
+check("中途進來的人直接看到新聞頁",
+  await until(last(g5), eq({ scene: "news", rev: newsRev })), { scene: "news", rev: newsRev });
+
 // 主持人打錯字不該讓全場卡在一個沒人認得的場景
-a.ws.send(JSON.stringify({ type: "scene", scene: "沒這個場景", fromRev: appRev }));
+a.ws.send(JSON.stringify({ type: "scene", scene: "沒這個場景", fromRev: newsRev }));
 check("不認得的場景一律當成請看台上",
-  await until(last(late), eq({ scene: "stage", rev: appRev + 1 })),
-  { scene: "stage", rev: appRev + 1 });
+  await until(last(late), eq({ scene: "stage", rev: newsRev + 1 })),
+  { scene: "stage", rev: newsRev + 1 });
 
 // App 畫面不是一輪來電，不該在 CSV 多長出一欄沒人接的紀錄
 const colsBefore = (await csvRows()).rows[0].length;
-a.ws.send(JSON.stringify({ type: "scene", scene: "app", fromRev: appRev + 1 }));
+a.ws.send(JSON.stringify({ type: "scene", scene: "app", fromRev: newsRev + 1 }));
 await until(last(late), (v) => v?.scene === "app");
 check("切到 App 畫面不會多記一輪來電", (await csvRows()).rows[0].length, colsBefore);
 

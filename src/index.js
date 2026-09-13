@@ -1,6 +1,6 @@
 const DEFAULT_STATE = { scene: "stage", rev: 0, at: 0 };
 // 認得的場景。不在名單裡的一律當成 stage，主持人打錯字不會讓全場卡住。
-const SCENES = new Set(["stage", "ringing", "app"]);
+const SCENES = new Set(["stage", "ringing", "app", "news"]);
 const MAX_DELAY = 10000;
 const MAX_NAME = 24;
 const BOM = "\uFEFF";

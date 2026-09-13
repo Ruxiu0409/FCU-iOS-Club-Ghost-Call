@@ -176,6 +176,51 @@
     box-shadow:inset 0 .5px 0 rgba(255,255,255,.32);
   }
 
+  /* ============ 新聞頁：照 iOS 的 in-app browser 做 ============ */
+  /* 為什麼不是 iframe：原站送 x-frame-options: SAMEORIGIN，瀏覽器直接擋掉。
+     就算擋得過，400 支手機同時去抓那個 WordPress 頁面，光它自己的字型、
+     追蹤碼和裝飾圖就夠把會場 AP 打死 —— 而這正是整套架構最怕的事。
+     所以內文寫死在 NEWS_CONFIG，照片也收進 repo，跟鈴聲一樣大家進場時就載好了。 */
+  #news{
+    padding:0;background:#fff;color:#1c1c1e;
+    align-items:stretch;justify-content:flex-start;text-align:left;
+  }
+  /* 上面這條網址列是這一頁的重點：少了它，這就只是我們 App 的另一個畫面，
+     而不是「一個網頁」。 */
+  .chrome{
+    flex:none;display:flex;align-items:center;justify-content:center;gap:5px;
+    padding:calc(var(--safe-t) + 12px) 16px 11px;
+    background:rgba(246,246,248,.96);
+    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+    border-bottom:.5px solid rgba(0,0,0,.14);
+    font-size:15px;color:#3c3c43;letter-spacing:-.01em;
+  }
+  .chrome svg{width:12px;height:12px;fill:#3c3c43;opacity:.6;flex:none}
+
+  .doc{
+    flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:22px 22px calc(var(--safe-b) + 40px);
+  }
+  .doc .kicker{margin:0;font-size:13px;font-weight:600;color:#0a6cbf;letter-spacing:.04em}
+  .doc h3{
+    margin:9px 0 0;font-size:25px;font-weight:700;line-height:1.32;
+    letter-spacing:-.01em;color:#111114;
+  }
+  .doc .when{margin:12px 0 0;font-size:13px;color:#8a8a90}
+  .doc figure{margin:20px 0 0}
+  .doc img{width:100%;border-radius:8px;display:block;background:#eee}
+  .doc figcaption{margin-top:8px;font-size:12px;line-height:1.6;color:#8a8a90}
+  /* 中文內文行距要比英文鬆，1.9 左右在手機上才讀得下去 */
+  .doc p.body{margin:18px 0 0;font-size:16px;line-height:1.9;color:#2b2b30;text-align:justify}
+  .doc .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+  .doc .tag{font-size:13px;color:#5b5b62;background:#f0f0f3;border-radius:999px;padding:6px 12px}
+  /* 來源故意是純文字不是連結：點出去就離開這一頁，WebSocket 一斷，
+     後面的環節就把人接不回來了。 */
+  .doc .source{
+    margin:26px 0 0;padding-top:16px;border-top:.5px solid #e3e3e8;
+    font-size:12px;line-height:1.7;color:#9a9aa0;word-break:break-all;
+  }
+
   /* 矮螢幕（Safari 有網址列時空間很緊）縮一點，確保按鈕不會被切掉 */
   @media (max-height:700px){
     #ring,#call{padding-top:calc(var(--safe-t) + 3vh)}
@@ -331,6 +376,15 @@
   </div>
 </div>
 
+<!-- ===== 新聞頁：全場一起看同一篇報導，但人還留在這一頁 ===== -->
+<div class="screen" id="news">
+  <div class="chrome">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 9V7a5 5 0 0 0-10 0v2H5.8A.8.8 0 0 0 5 9.8v11.4a.8.8 0 0 0 .8.8h12.4a.8.8 0 0 0 .8-.8V9.8a.8.8 0 0 0-.8-.8H17zM9 7a3 3 0 0 1 6 0v2H9V7z"/></svg>
+    <span id="newsHost"></span>
+  </div>
+  <div class="doc" id="newsDoc"></div>
+</div>
+
 <!-- 兩個 source：有 ringtone.mp3 就用它，沒有就自動退回合成的 wav。
      用瀏覽器原生的 source fallback，不必用 JS 探測，也就沒有
      「探測還沒回來使用者就按了加入」的競態問題。 -->
@@ -382,6 +436,23 @@ const APP_CONFIG = {
       ],
     },
   },
+};
+
+// 新聞頁的內容。整篇抄在這裡是故意的 —— 見上面 #news 那段 CSS 的說明。
+// 照片存成 public/news.jpg，跟鈴聲一樣要 commit 進 repo。
+const NEWS_CONFIG = {
+  url: "https://www.fcu.edu.tw/fcuweekly/news-detail/?id=41487",
+  kicker: "逢甲週報・校園新聞",
+  title: "逢甲大學資訊系 2024全國電子設計創意競賽智慧大數據及行動APP類冠軍",
+  date: "2024.03.28",
+  image: "/news.jpg",
+  caption: "逢甲大學資訊工程學系團隊奪2024全國電子設計創意競賽智慧大數據及行動APP類冠軍",
+  paragraphs: [
+    "逢甲大學資訊工程學系老師林佩蓉指導，大一、二學生林楷祐、張仁維、蔡承瞱、林瑞城和葉韋坪同學團隊，參加2024第二十屆全國電子設計創意競賽，以「基於影像辨識與互動回饋輔助輪椅族群運動之應用程式」，榮獲智慧大數據及行動APP類冠軍。繼逢甲大學自動控制工程學系奪資通類冠軍後，再下一城。",
+    "「基於影像辨識與互動回饋輔助輪椅族群運動之應用程式」是一款從物理治療專業角度分析並考量輪椅族群肢體狀況的專業運動應用程式。作品運用影像辨識技術，並參考身心障礙者適應體育課程設計與實務，設計不同難度的任務與動作，改善輪椅族群過度使用肩頸、長期久坐與運動量不足等健康問題。另設計社交模式、運動成效雷達圖、遠距操控與即時回饋等十多項功能，系統具備專業與完整性，逢甲大學團隊獲得評審一致肯定。成員張仁維指出：參賽期間和夥伴們連日熬夜奮戰過程非常辛苦，但在林佩蓉老師耐心的指導，以及團隊成員間相互支持和鼓勵的情況下，最終光榮奪得冠軍著實倍感榮耀。團隊期盼後續能新增更多對輪椅族群友善的功能，並和相關機構合作，為輪椅族群的身心健康盡一份心力。",
+    "2024全國電子設計創意競賽共分為三類，逢甲大學資訊工程學系與自動控制工程學系分別奪得智慧大數據及行動APP類、資通類雙冠軍，學用合一獲得肯定，逢甲師生與有榮焉。",
+  ],
+  tags: ["資訊工程學系", "資訊電機學院"],
 };
 // ============================
 
@@ -483,7 +554,49 @@ function showApp() {
   show("app");
 }
 
-// 只是要看畫面長怎樣時用：?screen=ring、?screen=call 或 ?screen=app。
+// ---------- 新聞頁 ----------
+// 一樣用 DOM API 組，不走 innerHTML。
+// 這裡在載入時就跑掉，不是等切到新聞頁才跑 —— 照片要趁大家進場的空檔慢慢下載完，
+// 不能等主持人按下去那一刻 400 支手機才一起去抓。（放在 display:none 裡面
+// 照樣會下載，別替它加 loading="lazy"，那才會真的拖到要顯示時才抓。）
+function buildNews() {
+  const c = NEWS_CONFIG;
+  $("newsHost").textContent = new URL(c.url).hostname;
+
+  const doc = $("newsDoc");
+  doc.replaceChildren();
+  if (c.kicker) doc.append(node("p", "kicker", c.kicker));
+  doc.append(node("h3", null, c.title));
+  if (c.date) doc.append(node("p", "when", c.date));
+
+  if (c.image) {
+    const fig = node("figure");
+    const img = node("img");
+    img.src = c.image;
+    img.alt = c.caption || c.title;
+    fig.append(img);
+    if (c.caption) fig.append(node("figcaption", null, c.caption));
+    doc.append(fig);
+  }
+
+  for (const para of c.paragraphs ?? []) doc.append(node("p", "body", para));
+
+  if (c.tags?.length) {
+    const tags = node("div", "tags");
+    for (const t of c.tags) tags.append(node("span", "tag", "# " + t));
+    doc.append(tags);
+  }
+  doc.append(node("p", "source", "來源：" + c.url));
+}
+buildNews();
+
+// 切進來一律從頭開始看，不要留著上一次捲到哪
+function showNews() {
+  $("newsDoc").scrollTop = 0;
+  show("news");
+}
+
+// 只是要看畫面長怎樣時用：?screen=ring、?screen=call、?screen=app 或 ?screen=news。
 // 不會連線也不會出聲，純粹給人看版面。
 const preview = new URLSearchParams(location.search).get("screen");
 if (preview && document.getElementById(preview)) show(preview);
@@ -547,6 +660,7 @@ function applyState(st) {
   stopRecording();
 
   if (st.scene === "app") return showApp();
+  if (st.scene === "news") return showNews();
   if (st.scene !== "ringing") { show("stage"); return; }
 
   const wait = ringDelay(st.at ?? 0, clockOffset, Date.now());

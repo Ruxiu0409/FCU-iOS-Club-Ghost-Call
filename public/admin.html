@@ -80,6 +80,7 @@
     </div>
     <button class="trigger" id="fire" disabled>觸 發 來 電</button>
     <button class="sub" id="toApp" disabled>切到 App 畫面</button>
+    <button class="sub" id="toNews" disabled>切到新聞頁</button>
     <button class="sub" id="reset" disabled>全部收回「請看台上」</button>
     <button class="sub" id="csv">下載名單 CSV</button>
     <button class="danger" id="wipe">清除名單資料</button>
@@ -134,7 +135,7 @@ function gateFailed(msg) {
   syncEnter();
 }
 
-const SCENE_NAME = { stage: "請看台上", ringing: "來電中", app: "App 畫面" };
+const SCENE_NAME = { stage: "請看台上", ringing: "來電中", app: "App 畫面", news: "新聞頁" };
 
 function render() {
   const ringing = state.scene === "ringing";
@@ -146,6 +147,7 @@ function render() {
   $("fire").disabled = !live || ringing;
   // 每顆按鈕在「已經在那個場景」時就關掉，按下去也沒事，但手指知道沒事可做
   $("toApp").disabled = !live || state.scene === "app";
+  $("toNews").disabled = !live || state.scene === "news";
   $("reset").disabled = !live || state.scene === "stage";
   $("scene").textContent =
     `目前場景：${SCENE_NAME[state.scene] ?? state.scene}　rev ${state.rev}`;
@@ -219,6 +221,9 @@ $("fire").onclick = () => {
 };
 $("toApp").onclick = () => {
   ws?.send(JSON.stringify({ type: "scene", scene: "app", fromRev: state.rev }));
+};
+$("toNews").onclick = () => {
+  ws?.send(JSON.stringify({ type: "scene", scene: "news", fromRev: state.rev }));
 };
 $("reset").onclick = () => {
   ws?.send(JSON.stringify({ type: "scene", scene: "stage", fromRev: state.rev }));

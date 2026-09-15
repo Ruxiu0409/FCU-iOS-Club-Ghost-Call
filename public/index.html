@@ -41,6 +41,32 @@
   #joinBtn:disabled{background:#2a2a33;color:#55555f}
   .hint{margin-top:26px;font-size:13px;line-height:1.7;color:#5f5f69;max-width:19em}
 
+  /* 從 LINE、IG 這類 App 的內建瀏覽器點進來的人，進場那一下解不開音訊 ——
+     主持人按下去時他們是安靜的，而且現場看不出來。所以進場畫面的右下角
+     擺一張小卡，把那條工具列畫出來讓人對照，指南針是唯一亮著的那一顆。
+     位置刻意貼著右下：內建瀏覽器的工具列就在它正下方。 */
+  .browser-tip{
+    position:absolute;right:18px;bottom:calc(var(--safe-b) + 14px);
+    display:flex;flex-direction:column;align-items:flex-end;gap:9px;
+    max-width:min(16em,64vw);text-align:right;
+    pointer-events:none;              /* 純提示，不要擋到任何點擊 */
+  }
+  .browser-tip p{margin:0;font-size:12px;line-height:1.7;color:#63636d}
+  .browser-tip b{color:#b4b4be;font-weight:600}
+  .browser-tip .bar{
+    display:flex;align-items:center;gap:15px;
+    padding:7px 13px;border-radius:999px;
+    background:#16161b;border:1px solid #2c2c36;
+  }
+  .browser-tip svg{
+    width:19px;height:19px;fill:none;stroke:#4b4b55;
+    stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;
+  }
+  .browser-tip .needle{fill:#4b4b55;stroke:none}
+  /* 指南針是要按的那一顆，只有它是亮的 */
+  .browser-tip .pick{stroke:#fff}
+  .browser-tip .pick .needle{fill:#fff}
+
   /* ---------- 看台上 ---------- */
   #stage .who{font-size:14px;color:#5c5c63;letter-spacing:.1em;margin-bottom:18px}
   #stage .big{font-size:30px;font-weight:600;letter-spacing:.24em;text-indent:.24em;color:#e8e8ea}
@@ -245,6 +271,24 @@
     <button id="joinBtn" disabled>加入</button>
   </div>
   <p class="hint">請把音量轉大<br>加入後請看台上</p>
+
+  <!-- 對照用的工具列。看得懂就代表他人在內建瀏覽器裡，得先換到 Safari -->
+  <div class="browser-tip">
+    <p>畫面最下面長這樣的話，<br><b>先點指南針用 Safari 開啟</b><br>不然等一下不會有聲音</p>
+    <div class="bar">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M16 10h2.5A1.5 1.5 0 0 1 20 11.5v7A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-7A1.5 1.5 0 0 1 5.5 10H8"/>
+        <path d="M12 3.6v11"/><path d="M8.6 7 12 3.6 15.4 7"/>
+      </svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 12a8 8 0 1 1-3.2-6.4"/><path d="M13.6 4.6 16.8 5.6 15.8 8.8"/>
+      </svg>
+      <svg class="pick" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.6"/>
+        <path class="needle" d="M15.5 8.5 13.6 13.6 8.5 15.5 10.4 10.4Z"/>
+      </svg>
+    </div>
+  </div>
 </div>
 
 <div class="screen" id="stage">

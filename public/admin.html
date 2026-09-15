@@ -47,6 +47,33 @@
   /* 「已經在那個場景」的按鈕要看得出來是暗的，主持人才不會對著沒作用的按鈕重按 */
   .sub:disabled{background:#141418;color:#4c4c56;cursor:not-allowed}
 
+  /* ---------- 提問 ---------- */
+  .qhead{
+    display:flex;align-items:baseline;justify-content:space-between;
+    margin:26px 0 10px;
+  }
+  .qhead b{font-size:15px;font-weight:600;color:#e2e2e7;letter-spacing:.06em}
+  .qhead span{font-size:12px;color:#71717d}
+  /* 清單自己捲，不然提問一多整個控制台會被推到看不到按鈕 */
+  #qlist{
+    max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    border:1px solid #23232b;border-radius:12px;background:#121216;
+  }
+  #qlist:empty{display:none}
+  .q{
+    padding:12px 14px;border-bottom:1px solid #1e1e25;cursor:pointer;
+    transition:background .12s ease;
+  }
+  .q:last-child{border-bottom:none}
+  .q .who{font-size:11px;color:#6a6a76;letter-spacing:.06em;margin-bottom:4px}
+  .q .txt{font-size:14px;line-height:1.6;color:#dcdce2;word-break:break-word}
+  /* 標成已回答就整則沉下去，眼睛只會停在還沒處理的 */
+  .q.done .txt{color:#54545e;text-decoration:line-through}
+  .q.done .who{color:#43434d}
+  @media (hover:hover){ .q:hover{background:#17171d} }
+  .q:active{background:#1c1c23}
+  #qempty{padding:16px;text-align:center;font-size:13px;color:#5a5a64}
+
   /* 不可復原的動作，跟其他按鈕拉開距離，避免手滑 */
   .danger{
     width:100%;padding:13px;font-size:14px;margin-top:22px;
@@ -94,8 +121,15 @@
     <button class="trigger" id="fire" disabled>觸 發 來 電</button>
     <button class="sub" id="toApp" disabled>切到 App 畫面</button>
     <button class="sub" id="toNews" disabled>切到新聞頁</button>
+    <button class="sub" id="toQa" disabled>切到提問畫面</button>
     <button class="sub" id="reset" disabled>全部收回「請看台上」</button>
     <button class="sub" id="csv">下載名單 CSV</button>
+
+    <div class="qhead"><b>提問</b><span id="qcount">0</span></div>
+    <div id="qempty">還沒有人提問</div>
+    <div id="qlist"></div>
+    <button class="sub" id="qcsv" style="margin-top:10px">下載提問 CSV</button>
+
     <button class="danger" id="wipe">清除名單資料</button>
     <div id="note"></div>
     <div class="bar"><i class="led" id="led"></i><span id="status">連線中…</span></div>
@@ -148,7 +182,7 @@ function gateFailed(msg) {
   syncEnter();
 }
 
-const SCENE_NAME = { stage: "請看台上", ringing: "來電中", app: "App 畫面", news: "新聞頁" };
+const SCENE_NAME = { stage: "請看台上", ringing: "來電中", app: "App 畫面", news: "新聞頁", qa: "提問畫面" };
 
 function render() {
   const ringing = state.scene === "ringing";
@@ -161,12 +195,69 @@ function render() {
   // 每顆按鈕在「已經在那個場景」時就關掉，按下去也沒事，但手指知道沒事可做
   $("toApp").disabled = !live || state.scene === "app";
   $("toNews").disabled = !live || state.scene === "news";
+  $("toQa").disabled = !live || state.scene === "qa";
   $("reset").disabled = !live || state.scene === "stage";
   $("scene").textContent =
     `目前場景：${SCENE_NAME[state.scene] ?? state.scene}　rev ${state.rev}`;
 }
 // 倒數期間要持續重畫
 setInterval(() => { if (state.scene === "ringing" && remaining() > 0) render(); }, 150);
+
+// ---------- 提問 ----------
+// 只認 qid，重複的同一則不會長出第二列 —— 重連時伺服器會重送整份清單
+const asked = new Map();
+
+function qRow(q) {
+  const row = document.createElement("div");
+  row.className = "q" + (q.answered ? " done" : "");
+  row.dataset.qid = q.qid;
+  const who = document.createElement("div");
+  who.className = "who";
+  const t = new Date(q.at);
+  who.textContent = `${q.name}　${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+  const txt = document.createElement("div");
+  txt.className = "txt";
+  txt.textContent = q.text;                 // textContent，不是 innerHTML
+  row.append(who, txt);
+  // 點一下切換已回答。標記走伺服器再廣播回來，兩台控制台才不會各標各的
+  row.onclick = () => {
+    const now = !asked.get(q.qid)?.answered;
+    ws?.send(JSON.stringify({ type: "answered", qid: q.qid, on: now }));
+  };
+  return row;
+}
+
+function qAdd(q) {
+  if (asked.has(q.qid)) return;
+  asked.set(q.qid, q);
+  $("qlist").append(qRow(q));
+  $("qlist").scrollTop = $("qlist").scrollHeight;   // 新的在最底下
+  qCount();
+}
+
+function qAll(list) {
+  asked.clear();
+  $("qlist").replaceChildren();
+  for (const q of list) { asked.set(q.qid, q); $("qlist").append(qRow(q)); }
+  qCount();
+}
+
+function qMark(qid, answered) {
+  const q = asked.get(qid);
+  if (q) q.answered = answered;
+  const row = $("qlist").querySelector(`[data-qid="${qid}"]`);
+  if (row) row.classList.toggle("done", !!answered);
+  qCount();
+}
+
+function qCount() {
+  let open = 0;
+  for (const q of asked.values()) if (!q.answered) open++;
+  $("qcount").textContent = asked.size
+    ? `${asked.size} 則${open ? `，${open} 則未回答` : "，都回答過了"}`
+    : "0";
+  $("qempty").hidden = asked.size > 0;
+}
 
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -203,6 +294,10 @@ function connect() {
       $("ready").textContent = m.stats.ready;
       $("ready").classList.toggle("all", m.stats.online > 0 && m.stats.ready === m.stats.online);
     }
+    if (m.type === "questions") qAll(m.questions ?? m.list ?? []);
+    if (m.type === "q") qAdd(m.q);
+    if (m.type === "qmark") qMark(m.qid, m.answered);
+    if (m.type === "state" && m.questions) qAll(m.questions);
     if (m.type === "wiped") {
       $("note").textContent =
         `已清除 ${m.removed} 筆` + (m.kept ? `，現場 ${m.kept} 人重新登記` : "");
@@ -236,6 +331,9 @@ $("toApp").onclick = () => {
 $("toNews").onclick = () => {
   ws?.send(JSON.stringify({ type: "scene", scene: "news", fromRev: state.rev }));
 };
+$("toQa").onclick = () => {
+  ws?.send(JSON.stringify({ type: "scene", scene: "qa", fromRev: state.rev }));
+};
 $("reset").onclick = () => {
   ws?.send(JSON.stringify({ type: "scene", scene: "stage", fromRev: state.rev }));
 };
@@ -246,6 +344,11 @@ $("wipe").onclick = () => {
 };
 $("csv").onclick = () => {
   location.href = `/export?room=${encodeURIComponent(room)}&token=${encodeURIComponent(token)}`;
+};
+// 提問另一份 CSV：欄位跟名單完全不同，硬塞進同一張表只會兩邊都難看
+$("qcsv").onclick = () => {
+  location.href =
+    `/export?kind=qa&room=${encodeURIComponent(room)}&token=${encodeURIComponent(token)}`;
 };
 </script>
 </body>

@@ -109,15 +109,43 @@
   /* hover 一定要包在 (hover:hover) 裡。手機沒有滑鼠，點完 :hover 會黏在
      按鈕上不放 —— 全場 400 支手機的按鈕點完都停在 hover 的樣子，那比
      沒有 hover 還糟。這段只有真的有指標裝置的人（筆電、iPad 配滑鼠）會吃到。 */
-  #joinBtn,.card button{transition:background .13s ease}
+  #joinBtn,#qSend,.card button{transition:background .13s ease}
   .circle{transition:filter .13s ease}
   @media (hover:hover){
-    #joinBtn:not(:disabled):hover,.card button:hover{background:#ededf2}
+    #joinBtn:not(:disabled):hover,#qSend:not(:disabled):hover,
+    .card button:hover{background:#ededf2}
     .circle:hover{filter:brightness(1.1)}
   }
   /* 按下去寫在 hover 後面：兩者同分，用滑鼠點的時候要讓 active 蓋過 hover */
-  #joinBtn:not(:disabled):active,.card button:active{background:#d5d5da}
+  #joinBtn:not(:disabled):active,#qSend:not(:disabled):active,
+  .card button:active{background:#d5d5da}
   .circle:active{filter:brightness(.82)}
+
+  /* ---------- 提問 ---------- */
+  /* 靠上排，不置中。鍵盤跳出來會吃掉下半個螢幕，置中的話輸入框正好被蓋住 ——
+     而 body 是 overflow:hidden，使用者沒辦法自己把畫面捲上來。 */
+  #qa{justify-content:flex-start;padding-top:calc(var(--safe-t) + 8vh)}
+  #qa h1{font-size:24px;font-weight:600;margin:0 0 8px;letter-spacing:.06em}
+  #qa .lead{margin:0 0 24px;font-size:14px;color:#7e7e85;line-height:1.7}
+  #qText{
+    width:100%;height:118px;resize:none;display:block;
+    background:#16161b;border:1px solid #2c2c36;color:#fff;
+    padding:14px 16px;border-radius:14px;line-height:1.6;
+    /* 16px 是下限：再小 iOS 會在對焦時自己把整頁放大 */
+    font-size:16px;font-family:inherit;
+    -webkit-user-select:text;user-select:text;
+  }
+  #qText:focus{outline:none;border-color:#5a5a6a;background:#1b1b21}
+  #qText::placeholder{color:#4e4e58}
+  #qSend{
+    width:100%;margin-top:12px;padding:17px;border:none;border-radius:14px;
+    background:#fff;color:#000;font-size:17px;font-weight:600;
+    font-family:inherit;cursor:pointer;
+  }
+  #qSend:disabled{background:#2a2a33;color:#55555f}
+  /* 高度先佔著，送出前後不會把按鈕往上頂 */
+  #qMsg{margin-top:20px;font-size:13px;line-height:1.7;color:#5f5f69;min-height:2.4em}
+  #qMsg.ok{color:#34c759}
 
   /* ---------- 看台上 ---------- */
   #stage .who{font-size:14px;color:#5c5c63;letter-spacing:.1em;margin-bottom:18px}
@@ -385,6 +413,17 @@
     <button id="joinBtn" disabled>加入</button>
   </div>
   <p class="hint">加入後請看台上</p>
+</div>
+
+<!-- 提問：主持人切過來，台下打字送出，控制台即時看到 -->
+<div class="screen" id="qa">
+  <h1>有問題嗎？</h1>
+  <p class="lead">打完按送出，講者的螢幕上就會看到</p>
+  <div class="field">
+    <textarea id="qText" maxlength="200" placeholder="想問什麼？"></textarea>
+    <button id="qSend" disabled>送出</button>
+  </div>
+  <p id="qMsg">會跟你的暱稱一起送出</p>
 </div>
 
 <div class="screen" id="stage">
@@ -736,8 +775,36 @@ function showNews() {
   show("news");
 }
 
+// ---------- 提問 ----------
+const QMSG = "會跟你的暱稱一起送出";
+const syncQ = () => { $("qSend").disabled = !$("qText").value.trim(); };
+$("qText").addEventListener("input", syncQ);
+
+$("qSend").onclick = () => {
+  const text = $("qText").value.trim().slice(0, 200);
+  if (!text) return;
+  send({ type: "question", text });
+  // 先清掉再等回覆：等伺服器回來才清，手速快的人會把同一則送兩次
+  $("qText").value = "";
+  syncQ();
+  qmsg("送出中…");
+};
+
+function qmsg(text, ok) {
+  $("qMsg").textContent = text;
+  $("qMsg").className = ok ? "ok" : "";
+}
+
+// 切過來時把上一輪的提示收乾淨，但不清輸入框 ——
+// 有人可能在切場景之前就先打好了
+function showQa() {
+  qmsg(QMSG);
+  syncQ();
+  show("qa");
+}
+
 // 只是要看畫面長怎樣時用：?screen=ring、?screen=call、?screen=app 或 ?screen=news。
-// 不會連線也不會出聲，純粹給人看版面。
+// 不會連線也不會出聲，純粹給人看版面。?screen=qa 也可以。
 const preview = new URLSearchParams(location.search).get("screen");
 if (preview && document.getElementById(preview)) show(preview);
 
@@ -805,6 +872,7 @@ function applyState(st) {
 
   if (st.scene === "app") return showApp();
   if (st.scene === "news") return showNews();
+  if (st.scene === "qa") return showQa();
   if (st.scene !== "ringing") { show("stage"); return; }
 
   const wait = ringDelay(st.at ?? 0, clockOffset, Date.now());
@@ -912,6 +980,10 @@ function ensureSocket() {
     if (e.data === "P") return;
     let m; try { m = JSON.parse(e.data); } catch { return; }
     if (m.type === "state") applyState(m);
+    if (m.type === "qok") {
+      qmsg(m.left > 0 ? `已送出，還可以再問 ${m.left} 則` : "已送出，謝謝", true);
+    }
+    if (m.type === "qfull") qmsg(`一個人最多問 ${m.max} 則，已經問滿了`);
     if (m.type === "sync") {
       const rtt = Date.now() - m.c;
       if (rtt < bestRtt) { bestRtt = rtt; clockOffset = m.s - (m.c + rtt / 2); }

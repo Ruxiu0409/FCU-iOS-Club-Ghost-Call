@@ -1,13 +1,20 @@
 const DEFAULT_STATE = { scene: "stage", rev: 0, at: 0 };
 // 認得的場景。不在名單裡的一律當成 stage，主持人打錯字不會讓全場卡住。
-const SCENES = new Set(["stage", "ringing", "app", "news"]);
+const SCENES = new Set(["stage", "ringing", "app", "news", "qa"]);
 const MAX_DELAY = 10000;
 const MAX_NAME = 24;
+const MAX_Q = 200;              // 一則提問最多這麼長
+const MAX_Q_PER_PERSON = 5;     // 一個人最多問幾則，免得一個人洗版
 const BOM = "\uFEFF";
 
 // 去掉控制字元，避免暱稱把 CSV 或畫面弄壞
 const clean = (s) =>
   String(s ?? "").replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, MAX_NAME);
+
+// 提問另外處理：換行換成空白再收斂，控制台那份清單才不會被一則提問撐開
+const cleanQ = (s) =>
+  String(s ?? "").replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ").trim().slice(0, MAX_Q);
 
 export class Room {
   constructor(ctx, env) {
@@ -25,6 +32,14 @@ export class Room {
       this.sql.exec(`CREATE TABLE IF NOT EXISTS rounds(
         rev INTEGER PRIMARY KEY,
         started_at INTEGER NOT NULL
+      )`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS questions(
+        qid INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        text TEXT NOT NULL,
+        at INTEGER NOT NULL,
+        answered INTEGER NOT NULL DEFAULT 0
       )`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS choices(
         rev INTEGER NOT NULL,
@@ -70,6 +85,15 @@ export class Room {
     }
   }
 
+  questionList() {
+    return this.rows(
+      `SELECT qid, name, text, at, answered FROM questions ORDER BY qid`
+    ).map((r) => ({
+      qid: Number(r.qid), name: r.name, text: r.text,
+      at: Number(r.at), answered: Number(r.answered),
+    }));
+  }
+
   pushAdmin() {
     this.broadcast({ type: "stats", stats: this.counts() }, "admin");
   }
@@ -77,7 +101,11 @@ export class Room {
   async fetch(request) {
     const url = new URL(request.url);
 
-    if (url.pathname === "/export") return this.exportCsv();
+    if (url.pathname === "/export") {
+      return url.searchParams.get("kind") === "qa"
+        ? this.exportQuestions()
+        : this.exportCsv();
+    }
     if (url.pathname !== "/ws") return new Response("not found", { status: 404 });
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("expected websocket", { status: 426 });
@@ -92,7 +120,9 @@ export class Room {
     server.send(JSON.stringify({
       type: "state",
       ...state,
-      ...(role === "admin" ? { stats: this.counts() } : {}),
+      ...(role === "admin"
+        ? { stats: this.counts(), questions: this.questionList() }
+        : {}),
     }));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -142,6 +172,16 @@ export class Room {
       return;
     }
 
+    if (msg.type === "answered") {
+      const qid = Number(msg.qid);
+      if (!Number.isInteger(qid) || qid <= 0) return;
+      const on = msg.on ? 1 : 0;
+      this.sql.exec(`UPDATE questions SET answered = ? WHERE qid = ?`, on, qid);
+      // 廣播給所有 admin：有人同時開兩台控制台也不會標到不同步
+      this.broadcast({ type: "qmark", qid, answered: on }, "admin");
+      return;
+    }
+
     if (msg.type === "wipe") return this.wipe(ws, state);
     if (msg.type === "refresh") this.pushAdmin();
   }
@@ -149,6 +189,7 @@ export class Room {
   // 清空名單與所有回報。不可復原。
   async wipe(ws, state) {
     const removed = Number(this.rows(`SELECT COUNT(*) n FROM people`)[0]?.n ?? 0);
+    this.sql.exec(`DELETE FROM questions`);
     this.sql.exec(`DELETE FROM choices`);
     this.sql.exec(`DELETE FROM rounds`);
     this.sql.exec(`DELETE FROM people`);
@@ -178,6 +219,7 @@ export class Room {
     this.broadcast(
       { type: "state", ...next, stats: this.counts() }, "admin"
     );
+    this.broadcast({ type: "questions", list: [] }, "admin");
     ws.send(JSON.stringify({ type: "wiped", removed, kept }));
   }
 
@@ -206,6 +248,32 @@ export class Room {
       return;
     }
 
+    if (msg.type === "question") {
+      if (!att.id) return;
+      const text = cleanQ(msg.text);
+      if (!text) return;
+      const mine = Number(
+        this.rows(`SELECT COUNT(*) n FROM questions WHERE id = ?`, att.id)[0]?.n ?? 0
+      );
+      if (mine >= MAX_Q_PER_PERSON) {
+        ws.send(JSON.stringify({ type: "qfull", max: MAX_Q_PER_PERSON }));
+        return;
+      }
+      this.sql.exec(
+        `INSERT INTO questions(id, name, text, at, answered) VALUES(?, ?, ?, ?, 0)`,
+        att.id, att.name, text, now
+      );
+      const qid = Number(this.rows(`SELECT last_insert_rowid() AS qid`)[0]?.qid ?? 0);
+      ws.send(JSON.stringify({ type: "qok", left: MAX_Q_PER_PERSON - mine - 1 }));
+      // 只推新的這一則。400 人一人一則若每次都重送整份清單，
+      // 就是 400 次全量廣播，最後幾則會塞在最忙的時候送出去。
+      this.broadcast(
+        { type: "q", q: { qid, name: att.name, text, at: now, answered: 0 } },
+        "admin"
+      );
+      return;
+    }
+
     if (msg.type !== "choice" || !att.id) return;
     if (msg.rev !== state.rev) return;                  // 上一輪的回報，丟掉
     if (msg.choice !== "answer" && msg.choice !== "decline") return;
@@ -224,6 +292,22 @@ export class Room {
 
   async webSocketError() {
     this.pushAdmin();
+  }
+
+  // 提問匯出：一則一列，照送出的順序
+  exportQuestions() {
+    const tw = (ms) => new Date(ms).toLocaleString("sv-SE", { timeZone: "Asia/Taipei" });
+    const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const lines = [["時間", "暱稱", "提問", "已回答"].map(q).join(",")];
+    for (const r of this.questionList()) {
+      lines.push([q(tw(r.at)), q(r.name), q(r.text), q(r.answered ? "是" : "否")].join(","));
+    }
+    return new Response(BOM + lines.join("\r\n"), {
+      headers: {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="ghost-call-qa-${Date.now()}.csv"`,
+      },
+    });
   }
 
   // 事後匯出：一人一列，每一輪來電各一欄

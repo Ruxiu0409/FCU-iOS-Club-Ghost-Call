@@ -29,7 +29,10 @@ const eq = (want) => (v) => JSON.stringify(v) === JSON.stringify(want);
 function open(url) {
   return new Promise((res, rej) => {
     const ws = new WebSocket(url);
-    const o = { ws, states: [], stats: null, joined: null, wiped: null };
+    const o = {
+      ws, states: [], stats: null, joined: null, wiped: null,
+      qs: [], marks: [], qok: null, qfull: null,
+    };
     ws.onopen = () => res(o);
     ws.onerror = () => rej(new Error("connect failed"));
     ws.onmessage = (e) => {
@@ -40,11 +43,18 @@ function open(url) {
       if (m.type === "joined") o.joined = m.name;
       if (m.stats) o.stats = m.stats;
       if (m.type === "wiped") o.wiped = m;
+      if (m.type === "questions") o.qs = m.questions ?? m.list ?? [];
+      if (m.type === "state" && m.questions) o.qs = m.questions;
+      if (m.type === "q") o.qs.push(m.q);
+      if (m.type === "qmark") o.marks.push({ qid: m.qid, answered: m.answered });
+      if (m.type === "qok") o.qok = m;
+      if (m.type === "qfull") o.qfull = m;
     };
     o.join = (id, name) => ws.send(JSON.stringify({ type: "join", id, name }));
     o.pick = (choice, rev) => ws.send(JSON.stringify({ type: "choice", choice, rev }));
     o.ready = () => ws.send(JSON.stringify({ type: "ready" }));
     o.doSync = () => ws.send(JSON.stringify({ type: "sync", c: Date.now() }));
+    o.ask = (text) => ws.send(JSON.stringify({ type: "question", text }));
     return o;
   });
 }
@@ -53,6 +63,12 @@ const admin = () => open(`${HOST}/ws?role=admin&room=${ROOM}&token=${TOKEN}`);
 const last = (o) => () => o.states.at(-1);
 const online = (o) => () => o.stats?.online;
 const readyN = (o) => () => o.stats?.ready;
+
+async function qaRows() {
+  const res = await fetch(`${HTTP}/export?kind=qa&room=${ROOM}&token=${TOKEN}`);
+  const text = await res.text();
+  return text.trim().split("\r\n").map((l) => l.slice(1, -1).split('","'));
+}
 
 async function csvRows() {
   const res = await fetch(`${HTTP}/export?room=${ROOM}&token=${TOKEN}`);
@@ -232,6 +248,78 @@ const colsBefore = (await csvRows()).rows[0].length;
 a.ws.send(JSON.stringify({ type: "scene", scene: "app", fromRev: newsRev + 1 }));
 await until(last(late), (v) => v?.scene === "app");
 check("切到 App 畫面不會多記一輪來電", (await csvRows()).rows[0].length, colsBefore);
+
+// --- 提問 ---
+const qaBase = last(a)().rev;
+a.ws.send(JSON.stringify({ type: "scene", scene: "qa", fromRev: qaBase }));
+const qaRev = qaBase + 1;
+check("切到提問畫面",
+  await until(last(late), eq({ scene: "qa", rev: qaRev })), { scene: "qa", rev: qaRev });
+
+// 提問不是一輪來電，不該在名單 CSV 多長出一欄
+check("切到提問畫面不會多記一輪來電", (await csvRows()).rows[0].length, colsBefore);
+
+const qg = await guest();
+qg.join("q-1", "阿宏");
+await until(() => qg.joined, (v) => !!v);
+
+qg.ask("為什麼要用 Durable Objects？");
+check("提問會即時推到控制台",
+  await until(() => a.qs.at(-1)?.text, (v) => !!v), "為什麼要用 Durable Objects？");
+check("提問帶著暱稱", a.qs.at(-1).name, "阿宏");
+
+// 沒報名字的人沒有身分，提問無從歸屬，直接丟掉
+const stranger = await guest();
+const n0 = a.qs.length;
+stranger.ask("我沒報名字");
+await sleep(400);
+check("沒報名字的人不能提問", a.qs.length, n0);
+
+// 換行會把控制台那份清單撐開，收斂成一行
+qg.ask("第一行\n第二行\t有 tab");
+check("換行和 tab 收斂成空白",
+  await until(() => a.qs.at(-1)?.text, (v) => v?.includes("第二行")),
+  "第一行 第二行 有 tab");
+
+const n1 = a.qs.length;
+qg.ask("   ");
+await sleep(400);
+check("只有空白的提問不會留下紀錄", a.qs.length, n1);
+
+qg.ask("長".repeat(300));
+check("超過 200 字會被截掉",
+  (await until(() => a.qs.at(-1)?.text, (v) => v?.startsWith("長")))?.length, 200);
+
+// 這時 qg 已經問了 3 則，再問 2 則剛好滿 5
+qg.ask("第四則");
+await until(() => a.qs.length, (v) => v >= n1 + 2);
+qg.ask("第五則");
+await until(() => a.qs.length, (v) => v >= n1 + 3);
+const n2 = a.qs.length;
+qg.ask("第六則");
+check("一個人最多問 5 則",
+  (await until(() => qg.qfull, (v) => !!v))?.max, 5);
+await sleep(300);
+check("被擋下的那則不會進清單", a.qs.length, n2);
+
+// 標記走伺服器再廣播，兩台控制台才不會各標各的
+const markId = a.qs.at(-1).qid;
+a.ws.send(JSON.stringify({ type: "answered", qid: markId, on: true }));
+check("標記已回答會廣播回控制台",
+  await until(() => a.marks.at(-1), (v) => v?.qid === markId),
+  { qid: markId, answered: 1 });
+
+const qrows = await qaRows();
+check("提問 CSV 的表頭", qrows[0], ["時間", "暱稱", "提問", "已回答"]);
+check("提問 CSV 收得到那則提問",
+  qrows.some((r) => r[2] === "為什麼要用 Durable Objects？"), true);
+check("提問 CSV 記得住已回答",
+  qrows.filter((r) => r[3] === "是").length, 1);
+
+// 重連的控制台要拿到完整的清單，不能只看到重連之後的新提問
+const a2 = await admin();
+check("控制台重連會拿到整份提問",
+  (await until(() => a2.qs.length, (v) => v > 0)), a.qs.length);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

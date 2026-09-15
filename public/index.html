@@ -126,7 +126,8 @@
      而 body 是 overflow:hidden，使用者沒辦法自己把畫面捲上來。 */
   #qa{justify-content:flex-start;padding-top:calc(var(--safe-t) + 8vh)}
   #qa h1{font-size:24px;font-weight:600;margin:0 0 8px;letter-spacing:.06em}
-  #qa .lead{margin:0 0 24px;font-size:14px;color:#7e7e85;line-height:1.7}
+  /* 一行到底。這句是在說「送出去會怎樣」，斷成兩行就變成兩件事 */
+  #qa .lead{margin:0 0 24px;font-size:16px;color:#7e7e85;line-height:1.7;white-space:nowrap}
   #qText{
     width:100%;height:118px;resize:none;display:block;
     background:#16161b;border:1px solid #2c2c36;color:#fff;
@@ -144,7 +145,7 @@
   }
   #qSend:disabled{background:#2a2a33;color:#55555f}
   /* 高度先佔著，送出前後不會把按鈕往上頂 */
-  #qMsg{margin-top:20px;font-size:13px;line-height:1.7;color:#5f5f69;min-height:2.4em}
+  #qMsg{margin-top:20px;font-size:14px;line-height:1.7;color:#5f5f69;min-height:2.4em;white-space:nowrap}
   #qMsg.ok{color:#34c759}
 
   /* ---------- 看台上 ---------- */

@@ -213,8 +213,6 @@ function connect() {
 
 // fromRev 讓這個動作變成冪等的
 $("fire").onclick = () => {
-  const s = $("ready").textContent, o = $("online").textContent;
-  if (!confirm(`確定要讓全場手機響起來？\n\n在線 ${o} 人，其中 ${s} 人音檔已載完。\n還沒載完的人接聽後會沒有聲音。`)) return;
   ws?.send(JSON.stringify({
     type: "scene", scene: "ringing", fromRev: state.rev, delay: FIRE_DELAY,
   }));

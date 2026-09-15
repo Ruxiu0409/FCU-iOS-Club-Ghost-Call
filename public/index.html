@@ -46,38 +46,41 @@
      擺一張小卡，把那條工具列畫出來讓人對照，指南針是唯一亮著的那一顆。
      位置刻意貼著右下：內建瀏覽器的工具列就在它正下方。 */
   .browser-tip{
-    position:absolute;right:18px;bottom:calc(var(--safe-b) + 14px);
-    display:flex;flex-direction:column;align-items:flex-end;gap:14px;
+    /* 真的那顆指南針的中心離螢幕右邊多遠。從實機截圖量的：1206px 寬、
+       圖示中心在 1059px，都除以 3 倍率 = 402pt 的螢幕、離右邊 49pt。
+       尾巴就對在這個位置，對話框指的是那顆按鈕本人，不是隨便一個角落。 */
+    --btn-x:49px;
+    --edge:18px;                      /* 對話框自己離螢幕右邊多遠 */
+    position:absolute;right:var(--edge);bottom:calc(var(--safe-b) + 14px);
     max-width:min(17em,66vw);
-    pointer-events:none;              /* 純提示，不要擋到任何點擊 */
-  }
-  .browser-tip .bubble{
-    position:relative;
     padding:11px 14px;border-radius:15px;
     background:#16161b;border:1px solid #2c2c36;
-    font-size:12px;line-height:1.75;color:#63636d;text-align:right;
-    /* 慢慢上下飄。週期拉到 4.6 秒、幅度只有 5px，是為了讓它在眼角餘光裡
-       會動、但盯著看不覺得吵 —— 旁邊還有暱稱要打，這張卡不能搶戲。 */
+    font-size:12px;line-height:1.95;color:#63636d;text-align:right;
+    pointer-events:none;              /* 純提示，不要擋到任何點擊 */
+    /* 慢慢上下飄。週期 4.6 秒、幅度 5px，在眼角餘光裡會動，
+       但旁邊還有暱稱要打，盯著看不能覺得吵。 */
     animation:tip-float 4.6s ease-in-out infinite;
     will-change:transform;
   }
-  @keyframes tip-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-  /* 指南針不動：它代表的是真的那顆按鈕，飄的是雲不是按鈕 */
   .browser-tip b{color:#b4b4be;font-weight:600}
-  /* 對話框的尾巴。轉 45 度的方塊，上半截被對話框自己蓋掉，
-     順便把那一段下框線一起蓋掉，接縫才不會露出來。 */
-  .browser-tip .bubble::after{
-    content:"";position:absolute;right:19px;bottom:-5.5px;
+  /* 圖示直接排進句子裡，讀到哪就看到哪，不用在兩個地方之間來回對 */
+  .browser-tip .compass{
+    width:15px;height:15px;vertical-align:-3px;margin:0 2px;
+    fill:none;stroke:#e8e8ea;stroke-width:1.7;stroke-linejoin:round;
+  }
+  .browser-tip .needle{fill:#e8e8ea;stroke:none}
+  /* 尾巴：轉 45 度的方塊，上半截被對話框自己蓋掉，順便把那一段
+     下框線也蓋掉，接縫才不會露出來。位置由 --btn-x 反推。 */
+  .browser-tip::after{
+    content:"";position:absolute;bottom:-5.5px;
+    /* 扣掉對話框的位移、它的 1px 邊框（絕對定位以 padding box 為準）、
+       再扣尾巴的半寬，剩下就是尾巴該站的位置 */
+    right:calc(var(--btn-x) - var(--edge) - 1px - 5.5px);
     width:11px;height:11px;background:#16161b;
     border-right:1px solid #2c2c36;border-bottom:1px solid #2c2c36;
     transform:rotate(45deg);
   }
-  /* 尾巴的中心離右邊 24.5px，指南針的中心 25px —— 對在同一條線上 */
-  .browser-tip .compass{
-    width:24px;height:24px;margin-right:13px;
-    fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;
-  }
-  .browser-tip .needle{fill:#fff;stroke:none}
+  @keyframes tip-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 
   /* ---------- 看台上 ---------- */
   #stage .who{font-size:14px;color:#5c5c63;letter-spacing:.1em;margin-bottom:18px}
@@ -87,7 +90,7 @@
   @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
   /* 系統開了「減少動態效果」就別動 */
   @media (prefers-reduced-motion:reduce){
-    .dot,.browser-tip .bubble{animation:none}
+    .dot,.browser-tip{animation:none}
   }
 
   /* ============ 以下照 iOS 的來電／通話畫面做 ============ */
@@ -288,13 +291,9 @@
   </div>
   <p class="hint">請把音量轉大<br>加入後請看台上</p>
 
-  <!-- 內建瀏覽器的工具列就在這張卡的正下方，對話框的尾巴指的就是那顆指南針 -->
+  <!-- 尾巴對著內建瀏覽器工具列上那顆真的指南針，位置見 --btn-x -->
   <div class="browser-tip">
-    <div class="bubble">畫面最下面有這顆的話，<br><b>先點它用 Safari 開啟</b><br>不然等一下不會有聲音</div>
-    <svg class="compass" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.6"/>
-      <path class="needle" d="M15.5 8.5 13.6 13.6 8.5 15.5 10.4 10.4Z"/>
-    </svg>
+    畫面最下面有<svg class="compass" viewBox="0 0 24 24" role="img" aria-label="指南針"><circle cx="12" cy="12" r="8.6"/><path class="needle" d="M15.5 8.5 13.6 13.6 8.5 15.5 10.4 10.4Z"/></svg>的話<br><b>用 Safari 開啟，體驗更好</b>
   </div>
 </div>
 

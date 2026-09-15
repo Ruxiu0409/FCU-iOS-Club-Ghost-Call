@@ -47,25 +47,37 @@
      位置刻意貼著右下：內建瀏覽器的工具列就在它正下方。 */
   .browser-tip{
     position:absolute;right:18px;bottom:calc(var(--safe-b) + 14px);
-    display:flex;flex-direction:column;align-items:flex-end;gap:9px;
-    max-width:min(16em,64vw);text-align:right;
+    display:flex;flex-direction:column;align-items:flex-end;gap:14px;
+    max-width:min(17em,66vw);
     pointer-events:none;              /* 純提示，不要擋到任何點擊 */
   }
-  .browser-tip p{margin:0;font-size:12px;line-height:1.7;color:#63636d}
-  .browser-tip b{color:#b4b4be;font-weight:600}
-  .browser-tip .bar{
-    display:flex;align-items:center;gap:15px;
-    padding:7px 13px;border-radius:999px;
+  .browser-tip .bubble{
+    position:relative;
+    padding:11px 14px;border-radius:15px;
     background:#16161b;border:1px solid #2c2c36;
+    font-size:12px;line-height:1.75;color:#63636d;text-align:right;
+    /* 慢慢上下飄。週期拉到 4.6 秒、幅度只有 5px，是為了讓它在眼角餘光裡
+       會動、但盯著看不覺得吵 —— 旁邊還有暱稱要打，這張卡不能搶戲。 */
+    animation:tip-float 4.6s ease-in-out infinite;
+    will-change:transform;
   }
-  .browser-tip svg{
-    width:19px;height:19px;fill:none;stroke:#4b4b55;
-    stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;
+  @keyframes tip-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  /* 指南針不動：它代表的是真的那顆按鈕，飄的是雲不是按鈕 */
+  .browser-tip b{color:#b4b4be;font-weight:600}
+  /* 對話框的尾巴。轉 45 度的方塊，上半截被對話框自己蓋掉，
+     順便把那一段下框線一起蓋掉，接縫才不會露出來。 */
+  .browser-tip .bubble::after{
+    content:"";position:absolute;right:19px;bottom:-5.5px;
+    width:11px;height:11px;background:#16161b;
+    border-right:1px solid #2c2c36;border-bottom:1px solid #2c2c36;
+    transform:rotate(45deg);
   }
-  .browser-tip .needle{fill:#4b4b55;stroke:none}
-  /* 指南針是要按的那一顆，只有它是亮的 */
-  .browser-tip .pick{stroke:#fff}
-  .browser-tip .pick .needle{fill:#fff}
+  /* 尾巴的中心離右邊 24.5px，指南針的中心 25px —— 對在同一條線上 */
+  .browser-tip .compass{
+    width:24px;height:24px;margin-right:13px;
+    fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;
+  }
+  .browser-tip .needle{fill:#fff;stroke:none}
 
   /* ---------- 看台上 ---------- */
   #stage .who{font-size:14px;color:#5c5c63;letter-spacing:.1em;margin-bottom:18px}
@@ -73,6 +85,10 @@
   #stage .sub{margin-top:14px;font-size:14px;color:#5c5c63;letter-spacing:.1em}
   .dot{width:7px;height:7px;border-radius:50%;background:#2f6b3d;margin-top:44px;animation:pulse 2.4s infinite}
   @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+  /* 系統開了「減少動態效果」就別動 */
+  @media (prefers-reduced-motion:reduce){
+    .dot,.browser-tip .bubble{animation:none}
+  }
 
   /* ============ 以下照 iOS 的來電／通話畫面做 ============ */
   /* 沒有聯絡人照片時，iOS 的底是由上而下的深灰漸層，不是純黑 */
@@ -272,22 +288,13 @@
   </div>
   <p class="hint">請把音量轉大<br>加入後請看台上</p>
 
-  <!-- 對照用的工具列。看得懂就代表他人在內建瀏覽器裡，得先換到 Safari -->
+  <!-- 內建瀏覽器的工具列就在這張卡的正下方，對話框的尾巴指的就是那顆指南針 -->
   <div class="browser-tip">
-    <p>畫面最下面長這樣的話，<br><b>先點指南針用 Safari 開啟</b><br>不然等一下不會有聲音</p>
-    <div class="bar">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M16 10h2.5A1.5 1.5 0 0 1 20 11.5v7A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-7A1.5 1.5 0 0 1 5.5 10H8"/>
-        <path d="M12 3.6v11"/><path d="M8.6 7 12 3.6 15.4 7"/>
-      </svg>
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M20 12a8 8 0 1 1-3.2-6.4"/><path d="M13.6 4.6 16.8 5.6 15.8 8.8"/>
-      </svg>
-      <svg class="pick" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8.6"/>
-        <path class="needle" d="M15.5 8.5 13.6 13.6 8.5 15.5 10.4 10.4Z"/>
-      </svg>
-    </div>
+    <div class="bubble">畫面最下面有這顆的話，<br><b>先點它用 Safari 開啟</b><br>不然等一下不會有聲音</div>
+    <svg class="compass" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.6"/>
+      <path class="needle" d="M15.5 8.5 13.6 13.6 8.5 15.5 10.4 10.4Z"/>
+    </svg>
   </div>
 </div>
 

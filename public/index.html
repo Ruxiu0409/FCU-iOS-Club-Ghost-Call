@@ -23,6 +23,24 @@
   }
   .screen.on{display:flex}
 
+  /* ---------- 開場卡 ---------- */
+  /* 進來的第一眼只講一件事：把聲音打開。這一步不收任何資料、
+     也還沒解鎖音訊，純粹是讓人先動手轉音量，再去想暱稱要打什麼。 */
+  .card{
+    width:100%;max-width:310px;
+    padding:30px 26px 26px;border-radius:24px;
+    background:#121216;border:1px solid #26262f;
+  }
+  .card .spk{width:42px;height:42px;color:#fff;margin-bottom:18px}
+  .card h1{font-size:21px;font-weight:600;margin:0 0 10px;letter-spacing:.04em}
+  .card p{margin:0 0 26px;font-size:14px;line-height:1.75;color:#7e7e85}
+  .card button{
+    width:100%;padding:16px;border:none;border-radius:14px;
+    background:#fff;color:#000;font-size:17px;font-weight:600;
+    font-family:inherit;cursor:pointer;
+  }
+  .card button:active{background:#d8d8dc}
+
   /* ---------- 入場 ---------- */
   #join h1{font-size:24px;font-weight:600;margin:0 0 8px;letter-spacing:.06em}
   #join p.lead{margin:0 0 34px;font-size:14px;color:#7e7e85;line-height:1.7}
@@ -281,8 +299,29 @@
 </head>
 <body>
 
+<!-- 第一眼。先把音量轉大，再去想暱稱 -->
+<div class="screen on" id="intro">
+  <div class="card">
+    <svg class="spk" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11.4 4.3 6.9 8H4.1a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.8l4.5 3.7a.6.6 0 0 0 1-.47V4.77a.6.6 0 0 0-1-.47Z" fill="currentColor"/>
+      <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+        <path d="M15.6 9.2a4.1 4.1 0 0 1 0 5.6"/>
+        <path d="M18.3 6.5a8 8 0 0 1 0 11"/>
+      </g>
+    </svg>
+    <h1>請先開啟聲音</h1>
+    <p>等一下手機會播出聲音，<br>先把音量轉到最大。</p>
+    <button id="introBtn">繼續</button>
+  </div>
+
+  <!-- 尾巴對著內建瀏覽器工具列上那顆真的指南針，位置見 --btn-x -->
+  <div class="browser-tip">
+    按下<svg class="compass" viewBox="0 0 24 24" role="img" aria-label="指南針"><circle cx="12" cy="12" r="8.6"/><path class="needle" d="M15.5 8.5 13.6 13.6 8.5 15.5 10.4 10.4Z"/></svg><b>用 Safari 開啟，體驗更好</b>
+  </div>
+</div>
+
 <!-- 這個「加入」是整套流程的關鍵：它同時是 iOS 的音訊解鎖手勢 -->
-<div class="screen on" id="join">
+<div class="screen" id="join">
   <h1>歡迎加入</h1>
   <p class="lead">輸入一個暱稱，方便統計人數</p>
   <div class="field">
@@ -290,12 +329,7 @@
            placeholder="你的暱稱" enterkeyhint="go">
     <button id="joinBtn" disabled>加入</button>
   </div>
-  <p class="hint">請把音量轉大<br>加入後請看台上</p>
-
-  <!-- 尾巴對著內建瀏覽器工具列上那顆真的指南針，位置見 --btn-x -->
-  <div class="browser-tip">
-    按下<svg class="compass" viewBox="0 0 24 24" role="img" aria-label="指南針"><circle cx="12" cy="12" r="8.6"/><path class="needle" d="M15.5 8.5 13.6 13.6 8.5 15.5 10.4 10.4Z"/></svg><b>用 Safari 開啟，體驗更好</b>
-  </div>
+  <p class="hint">加入後請看台上</p>
 </div>
 
 <div class="screen" id="stage">
@@ -651,6 +685,10 @@ function showNews() {
 // 不會連線也不會出聲，純粹給人看版面。
 const preview = new URLSearchParams(location.search).get("screen");
 if (preview && document.getElementById(preview)) show(preview);
+
+// 開場卡只是換個畫面，不碰音訊 —— 解鎖一定要留在「加入」那個手勢裡，
+// 在這裡先解一次不會比較保險，只會讓那條路多一個出錯的地方。
+$("introBtn").onclick = () => show("join");
 
 // 記住上次用的暱稱
 try { $("nick").value = localStorage.getItem("ghostcall_name") || ""; } catch {}

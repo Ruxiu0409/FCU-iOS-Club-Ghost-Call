@@ -7,10 +7,12 @@
     "directory": "./public"
   },
   // 對外的網址。custom_domain 讓 wrangler 連同 DNS 記錄一起建，不用進 dashboard 點。
-  // workers.dev 那組故意留著當備援，當天萬一自訂網域出事還有路可以走。
   "routes": [
     { "pattern": "iosclubsharing.ruxiu0409.com", "custom_domain": true }
   ],
+  // 一旦有了 routes，wrangler 就會預設把 workers.dev 關掉，所以這行要明寫。
+  // 舊網址留著當備援：當天萬一自訂網域出事，還有一條路可以走。
+  "workers_dev": true,
   "durable_objects": {
     "bindings": [{ "name": "ROOM", "class_name": "Room" }]
   },

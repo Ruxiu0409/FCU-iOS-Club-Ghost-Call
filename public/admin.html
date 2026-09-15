@@ -15,7 +15,8 @@
   .wrap{width:100%;max-width:460px}
   [hidden]{display:none!important}
   h1{font-size:15px;font-weight:600;letter-spacing:.18em;color:#71717d;margin:0 0 26px;text-align:center}
-  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;
+         transition:background .13s ease,color .13s ease,border-color .13s ease}
 
   /* ---------- 門檻 ---------- */
   #gate p{margin:0 0 20px;text-align:center;font-size:14px;color:#6a6a76;line-height:1.7}
@@ -51,7 +52,19 @@
     width:100%;padding:13px;font-size:14px;margin-top:22px;
     background:transparent;color:#a8564f;border:1px solid #462825;
   }
-  .danger:active{background:#2a1917}
+  /* ---------- 按鈕的回饋 ---------- */
+  /* 控制台幾乎都是在筆電上開的，所以這裡的 hover 比觀眾端實用得多：
+     手要移到哪顆、按下去會發生什麼，在按之前就看得出來。
+     還是包在 (hover:hover) 裡 —— 有人會用 iPad 當控制台。 */
+  @media (hover:hover){
+    .trigger:not(:disabled):hover{background:#ff5147}
+    .sub:not(:disabled):hover{background:#26262e;color:#c6c6d0}
+    .danger:hover{background:#2a1917;border-color:#6b3a35;color:#c76a62}
+  }
+  /* 按下去寫在 hover 後面，滑鼠點的時候才蓋得過 hover */
+  .trigger:not(:disabled):active{background:#d92b21}
+  .sub:not(:disabled):active{background:#31313b}
+  .danger:active{background:#3a201d}
   #note{margin-top:12px;text-align:center;font-size:13px;color:#6f8f6f;min-height:1.2em}
 
   .bar{display:flex;align-items:center;gap:9px;justify-content:center;

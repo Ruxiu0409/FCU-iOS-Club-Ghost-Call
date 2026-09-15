@@ -39,7 +39,6 @@
     background:#fff;color:#000;font-size:17px;font-weight:600;
     font-family:inherit;cursor:pointer;
   }
-  .card button:active{background:#d8d8dc}
 
   /* ---------- 入場 ---------- */
   #join h1{font-size:24px;font-weight:600;margin:0 0 8px;letter-spacing:.06em}
@@ -101,6 +100,20 @@
   }
   @keyframes tip-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 
+  /* ---------- 按鈕的回饋 ---------- */
+  /* hover 一定要包在 (hover:hover) 裡。手機沒有滑鼠，點完 :hover 會黏在
+     按鈕上不放 —— 全場 400 支手機的按鈕點完都停在 hover 的樣子，那比
+     沒有 hover 還糟。這段只有真的有指標裝置的人（筆電、iPad 配滑鼠）會吃到。 */
+  #joinBtn,.card button{transition:background .13s ease}
+  .circle{transition:filter .13s ease}
+  @media (hover:hover){
+    #joinBtn:not(:disabled):hover,.card button:hover{background:#ededf2}
+    .circle:hover{filter:brightness(1.1)}
+  }
+  /* 按下去寫在 hover 後面：兩者同分，用滑鼠點的時候要讓 active 蓋過 hover */
+  #joinBtn:not(:disabled):active,.card button:active{background:#d5d5da}
+  .circle:active{filter:brightness(.82)}
+
   /* ---------- 看台上 ---------- */
   #stage .who{font-size:14px;color:#5c5c63;letter-spacing:.1em;margin-bottom:18px}
   #stage .big{font-size:30px;font-weight:600;letter-spacing:.24em;text-indent:.24em;color:#e8e8ea}
@@ -137,7 +150,6 @@
     border-radius:50%;border:none;padding:0;cursor:pointer;
     display:flex;align-items:center;justify-content:center;
   }
-  .circle:active{filter:brightness(.82)}
   .circle svg{fill:#fff}
 
   /* 次要動作：半透明毛玻璃圓鈕 */
@@ -310,7 +322,7 @@
       </g>
     </svg>
     <h1>請先開啟聲音</h1>
-    <p>等一下手機會播出聲音，<br>先把音量轉到最大。</p>
+    <p>有聲音體驗比較好，<br>先把音量轉到最大。</p>
     <button id="introBtn">繼續</button>
   </div>
 

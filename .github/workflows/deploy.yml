@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://ghost-call.enokgood2.workers.dev
+      url: https://iosclubsharing.ruxiu0409.com
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

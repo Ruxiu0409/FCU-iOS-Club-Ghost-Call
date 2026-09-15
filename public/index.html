@@ -52,10 +52,11 @@
     --btn-x:49px;
     --edge:18px;                      /* 對話框自己離螢幕右邊多遠 */
     position:absolute;right:var(--edge);bottom:calc(var(--safe-b) + 14px);
-    max-width:min(17em,66vw);
-    padding:11px 14px;border-radius:15px;
+    /* 一行到底：不換行，寬度讓內容決定，對話框往左長 */
+    white-space:nowrap;
+    padding:10px 15px;border-radius:15px;
     background:#16161b;border:1px solid #2c2c36;
-    font-size:12px;line-height:1.95;color:#63636d;text-align:right;
+    font-size:14px;line-height:1.5;color:#63636d;
     pointer-events:none;              /* 純提示，不要擋到任何點擊 */
     /* 慢慢上下飄。週期 4.6 秒、幅度 5px，在眼角餘光裡會動，
        但旁邊還有暱稱要打，盯著看不能覺得吵。 */
@@ -65,7 +66,7 @@
   .browser-tip b{color:#b4b4be;font-weight:600}
   /* 圖示直接排進句子裡，讀到哪就看到哪，不用在兩個地方之間來回對 */
   .browser-tip .compass{
-    width:15px;height:15px;vertical-align:-3px;margin:0 2px;
+    width:17px;height:17px;vertical-align:-4px;margin:0 3px;
     fill:none;stroke:#e8e8ea;stroke-width:1.7;stroke-linejoin:round;
   }
   .browser-tip .needle{fill:#e8e8ea;stroke:none}
@@ -293,7 +294,7 @@
 
   <!-- 尾巴對著內建瀏覽器工具列上那顆真的指南針，位置見 --btn-x -->
   <div class="browser-tip">
-    畫面最下面有<svg class="compass" viewBox="0 0 24 24" role="img" aria-label="指南針"><circle cx="12" cy="12" r="8.6"/><path class="needle" d="M15.5 8.5 13.6 13.6 8.5 15.5 10.4 10.4Z"/></svg>的話<br><b>用 Safari 開啟，體驗更好</b>
+    按下<svg class="compass" viewBox="0 0 24 24" role="img" aria-label="指南針"><circle cx="12" cy="12" r="8.6"/><path class="needle" d="M15.5 8.5 13.6 13.6 8.5 15.5 10.4 10.4Z"/></svg><b>用 Safari 開啟，體驗更好</b>
   </div>
 </div>
 
